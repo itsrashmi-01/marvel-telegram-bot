@@ -6,7 +6,10 @@ from config import Config
 # Initialize MongoDB connection
 db_client = AsyncIOMotorClient(Config.MONGO_URI)
 db = db_client["marvel_db"]
-movies_collection = db["movies"] # Name fixed to match your list.py import
+
+# Define BOTH variable names so all plugins work perfectly without crashing
+movies_col = db["movies"]
+movies_collection = db["movies"]
 
 # TMDB Genre ID mapping
 GENRE_MAP = {
@@ -51,7 +54,7 @@ async def init_marvel_list(marvel_data: list, bot_username: str = ""):
     inserted = 0
     async with aiohttp.ClientSession() as session:
         for item in marvel_data:
-            existing = await movies_collection.find_one({"watch_order": item["order"]})
+            existing = await movies_col.find_one({"watch_order": item["order"]})
             if not existing:
                 tmdb_data = await fetch_tmdb_meta(session, item["title"])
                 
@@ -73,7 +76,7 @@ async def init_marvel_list(marvel_data: list, bot_username: str = ""):
                     "status": "Pending",
                     "files": []
                 }
-                await movies_collection.insert_one(doc)
+                await movies_col.insert_one(doc)
                 inserted += 1
     return inserted
 
@@ -87,13 +90,13 @@ async def add_or_update_file(watch_order: int, quality: str, file_size: str, fil
     }
     
     # 1. Remove existing entry of the same quality to avoid duplicates
-    await movies_collection.update_one(
+    await movies_col.update_one(
         {"watch_order": watch_order},
         {"$pull": {"files": {"quality": quality}}}
     )
     
     # 2. Append the new quality file and mark status as Available
-    await movies_collection.update_one(
+    await movies_col.update_one(
         {"watch_order": watch_order},
         {
             "$push": {"files": file_entry},
@@ -103,9 +106,9 @@ async def add_or_update_file(watch_order: int, quality: str, file_size: str, fil
 
 async def get_movie_by_order(watch_order: int):
     """Fetch movie details by its watch order number."""
-    return await movies_collection.find_one({"watch_order": watch_order})
+    return await movies_col.find_one({"watch_order": watch_order})
 
 async def get_all_movies():
     """Fetch all movies sorted by watch order."""
-    cursor = movies_collection.find().sort("watch_order", 1)
+    cursor = movies_col.find().sort("watch_order", 1)
     return await cursor.to_list(length=200)
