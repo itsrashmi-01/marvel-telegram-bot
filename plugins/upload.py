@@ -13,7 +13,7 @@ async def handle_media(client: Client, message: Message):
     
     user_state = UPLOAD_STATE.get(message.from_user.id)
     if not user_state:
-        await message.reply_text(">⚠️ ᴘʟᴇᴀsᴇ sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ ᴛʜᴇ /start ᴍᴇɴᴜ ғɪʀsᴛ.")
+        await message.reply_text("<blockquote>⚠️ ᴘʟᴇᴀsᴇ sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ ᴛʜᴇ /start ᴍᴇɴᴜ ғɪʀsᴛ.</blockquote>")
         return
 
     # Initialize the file array and status if this is the first file
@@ -22,7 +22,7 @@ async def handle_media(client: Client, message: Message):
         user_state["status"] = "receiving"
 
     if user_state["status"] != "receiving":
-        await message.reply_text(">⚠️ ᴄᴜʀʀᴇɴᴛʟʏ ᴡᴀɪᴛɪɴɢ ғᴏʀ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs. ᴘʟᴇᴀsᴇ ғɪɴɪsʜ ᴛʜᴇ ᴄᴜʀʀᴇɴᴛ sᴛᴇᴘ.")
+        await message.reply_text("<blockquote>⚠️ ᴄᴜʀʀᴇɴᴛʟʏ ᴡᴀɪᴛɪɴɢ ғᴏʀ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs. ᴘʟᴇᴀsᴇ ғɪɴɪsʜ ᴛʜᴇ ᴄᴜʀʀᴇɴᴛ sᴛᴇᴘ.</blockquote>")
         return
 
     # 1. Extract File Metadata
@@ -52,12 +52,10 @@ async def handle_media(client: Client, message: Message):
     sc_qualities = to_small_caps(', '.join(qualities))
     
     summary_text = (
-        f">📥 **{sc_title}**\n"
-        f">\n"
-        f">✅ {count} ғɪʟᴇ(s) ʀᴇᴄᴇɪᴠᴇᴅ & ғᴏʀᴡᴀʀᴅᴇᴅ.\n"
-        f">📺 **ǫᴜᴀʟɪᴛɪᴇs:** {sc_qualities}\n"
-        f">\n"
-        f">sᴇɴᴅ ᴍᴏʀᴇ ғɪʟᴇs, ᴏʀ ᴄʟɪᴄᴋ ᴄᴏɴғɪʀᴍ."
+        f"<blockquote>📥 <b>{sc_title}</b>\n\n"
+        f"✅ {count} ғɪʟᴇ(s) ʀᴇᴄᴇɪᴠᴇᴅ & ғᴏʀᴡᴀʀᴅᴇᴅ.\n"
+        f"📺 <b>ǫᴜᴀʟɪᴛɪᴇs:</b> {sc_qualities}\n\n"
+        f"sᴇɴᴅ ᴍᴏʀᴇ ғɪʟᴇs, ᴏʀ ᴄʟɪᴄᴋ ᴄᴏɴғɪʀᴍ.</blockquote>"
     )
     
     buttons = [
@@ -98,10 +96,9 @@ async def start_mediafire_collection(client: Client, query: CallbackQuery):
     sc_size = to_small_caps(first_file['file_size'])
     
     text = (
-        f">🔗 **ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs ʀᴇǫᴜɪʀᴇᴅ**\n"
-        f">\n"
-        f">ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
-        f">👉 **{sc_quality}** ({sc_size})"
+        f"<blockquote>🔗 <b>ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs ʀᴇǫᴜɪʀᴇᴅ</b>\n\n"
+        f"ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
+        f"👉 <b>{sc_quality}</b> ({sc_size})</blockquote>"
     )
     await query.message.edit_text(text)
 
@@ -130,10 +127,9 @@ async def handle_mediafire_links(client: Client, message: Message):
         sc_size = to_small_caps(next_file['file_size'])
         
         text = (
-            f">✅ ʟɪɴᴋ sᴀᴠᴇᴅ.\n"
-            f">\n"
-            f">ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
-            f">👉 **{sc_quality}** ({sc_size})"
+            f"<blockquote>✅ ʟɪɴᴋ sᴀᴠᴇᴅ.\n\n"
+            f"ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
+            f"👉 <b>{sc_quality}</b> ({sc_size})</blockquote>"
         )
         await message.reply_text(text)
     else:
@@ -142,12 +138,10 @@ async def handle_mediafire_links(client: Client, message: Message):
         
         sc_title = to_small_caps(user_state['title'])
         text = (
-            f">🎉 **ᴜᴘʟᴏᴀᴅ ᴄᴏᴍᴘʟᴇᴛᴇ!**\n"
-            f">\n"
-            f">🎬 {sc_title}\n"
-            f">✅ {len(user_state['files'])} ǫᴜᴀʟɪᴛɪᴇs sᴀᴠᴇᴅ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ.\n"
-            f">\n"
-            f">ᴜsᴇ `/post` ᴛᴏ ᴘᴜʙʟɪsʜ ᴛʜɪs ᴅɪʀᴇᴄᴛʟʏ ᴛᴏ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ."
+            f"<blockquote>🎉 <b>ᴜᴘʟᴏᴀᴅ ᴄᴏᴍᴘʟᴇᴛᴇ!</b>\n\n"
+            f"🎬 {sc_title}\n"
+            f"✅ {len(user_state['files'])} ǫᴜᴀʟɪᴛɪᴇs sᴀᴠᴇᴅ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ.\n\n"
+            f"ᴜsᴇ /post ᴛᴏ ᴘᴜʙʟɪsʜ ᴛʜɪs ᴅɪʀᴇᴄᴛʟʏ ᴛᴏ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ.</blockquote>"
         )
         await message.reply_text(text)
         
@@ -158,4 +152,4 @@ async def handle_mediafire_links(client: Client, message: Message):
 async def cancel_upload(client: Client, query: CallbackQuery):
     if query.from_user.id == Config.ADMIN_ID and query.from_user.id in UPLOAD_STATE:
         del UPLOAD_STATE[query.from_user.id]
-        await query.message.edit_text(">❌ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.")
+        await query.message.edit_text("<blockquote>❌ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.</blockquote>")
