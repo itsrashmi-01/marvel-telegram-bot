@@ -19,7 +19,7 @@ GENRE_MAP = {
 }
 
 async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
-    """Fetches posters, backdrop, overview, rating, and genres from TMDB."""
+    """Fetches posters, backdrop, overview, rating, year, and genres from TMDB."""
     tmdb_key = getattr(Config, "TMDB_API_KEY", "")
     if not tmdb_key:
         return {}
@@ -36,10 +36,15 @@ async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
                 poster_path = top.get("poster_path")
                 backdrop_path = top.get("backdrop_path")
                 genres = [GENRE_MAP.get(gid) for gid in top.get("genre_ids", []) if gid in GENRE_MAP]
+                
+                # Extract year from release_date (movies) or first_air_date (TV shows)
+                release_date = top.get("release_date") or top.get("first_air_date") or ""
+                release_year = release_date[:4] if release_date else "N/A"
 
                 return {
                     "overview": top.get("overview", "No synopsis available."),
                     "rating": round(top.get("vote_average", 0.0), 1),
+                    "release_year": release_year,
                     "genres": genres if genres else ["Action", "Sci-Fi", "Adventure"],
                     "images": {
                         "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else "",
@@ -51,7 +56,7 @@ async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
     return {}
 
 async def init_marvel_list(marvel_data: list, bot_username: str = ""):
-    """Seeds the 82 Marvel movies into MongoDB and automatically grabs metadata."""
+    """Seeds the Marvel movies into MongoDB and automatically grabs metadata."""
     inserted = 0
     async with aiohttp.ClientSession() as session:
         for item in marvel_data:
@@ -65,6 +70,7 @@ async def init_marvel_list(marvel_data: list, bot_username: str = ""):
                     "saga_rank": item.get("saga_rank", 0),
                     "saga": item.get("saga", "Marvel Universe"),
                     "language": "English + Hindi",
+                    "release_year": tmdb_data.get("release_year", "N/A"),
                     "genres": tmdb_data.get("genres", ["Action", "Sci-Fi", "Adventure"]),
                     "rating": tmdb_data.get("rating", 0.0),
                     "overview": tmdb_data.get("overview", "Overview coming soon."),
