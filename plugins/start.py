@@ -2,7 +2,7 @@ from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import Config
 from plugins.list import RAW_MARVEL_LIST
-from database import movies_col, get_target_channel, set_target_channel, get_movie_by_order
+from database import movies_col, get_target_channel, set_target_channel, get_movie_by_order, init_marvel_list
 
 # --- STATE MEMORY ---
 UPLOAD_STATE = {}
@@ -126,9 +126,27 @@ async def preview_movie(client: Client, query: CallbackQuery):
     order = int(query.data.split("_")[1])
     movie = await get_movie_by_order(order)
     
+    # --- AUTO-FETCH LOGIC IF NOT IN DATABASE ---
     if not movie:
-        await query.answer("Movie not found in database.", show_alert=True)
-        return
+        await query.answer("Fetching TMDB metadata... please wait a second.", show_alert=False)
+        
+        # Grab the raw details from the list
+        raw_movie = next((m for m in RAW_MARVEL_LIST if m["order"] == order), None)
+        if not raw_movie:
+            await query.answer("Error: Movie not found in raw list.", show_alert=True)
+            return
+            
+        # Initialize this single movie in the database on-the-fly
+        bot_info = await client.get_me()
+        await init_marvel_list([raw_movie], bot_username=bot_info.username)
+        
+        # Fetch it again now that it exists
+        movie = await get_movie_by_order(order)
+        
+        if not movie:
+            await query.answer("Failed to initialize movie in database.", show_alert=True)
+            return
+    # ------------------------------------------
 
     poster_url = movie.get("images", {}).get("poster_url", "")
     genres_str = ", ".join(movie.get("genres", []))
