@@ -33,10 +33,9 @@ async def start_handler(client: Client, message: Message):
         
     user_name = to_small_caps(message.from_user.first_name)
     text = (
-        f">👋 **ᴡᴇʟᴄᴏᴍᴇ {user_name}!**\n"
-        f">\n"
-        f">ɪ ᴀᴍ ᴛʜᴇ ᴍᴀʀᴠᴇʟ ᴜɴɪᴠᴇʀsᴇ ᴍᴇᴅɪᴀ ʙᴏᴛ.\n"
-        f">ᴄʟɪᴄᴋ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ."
+        f"<blockquote>👋 <b>ᴡᴇʟᴄᴏᴍᴇ {user_name}!</b>\n\n"
+        f"ɪ ᴀᴍ ᴛʜᴇ ᴍᴀʀᴠᴇʟ ᴜɴɪᴠᴇʀsᴇ ᴍᴇᴅɪᴀ ʙᴏᴛ.\n"
+        f"ᴄʟɪᴄᴋ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ.</blockquote>"
     )
     
     await message.reply_text(
@@ -52,9 +51,8 @@ async def return_main_menu(client: Client, query: CallbackQuery):
     ]
     
     text = (
-        ">👋 **ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ ᴛᴏ ᴛʜᴇ ᴍᴀɪɴ ᴍᴇɴᴜ!**\n"
-        ">\n"
-        ">ᴄʟɪᴄᴋ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ."
+        "<blockquote>👋 <b>ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ ᴛᴏ ᴛʜᴇ ᴍᴀɪɴ ᴍᴇɴᴜ!</b>\n\n"
+        "ᴄʟɪᴄᴋ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ.</blockquote>"
     )
     
     if query.message.photo:
@@ -78,7 +76,7 @@ async def upload_menu_selection(client: Client, query: CallbackQuery):
         
     buttons.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="main_menu")])
 
-    text = ">📤 **sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴠɪᴇᴡ ɪᴛs ᴍᴏᴠɪᴇs:**"
+    text = "<blockquote>📤 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴠɪᴇᴡ ɪᴛs ᴍᴏᴠɪᴇs:</b></blockquote>"
     
     if query.message.photo:
         await query.message.delete()
@@ -131,10 +129,9 @@ async def saga_pagination(client: Client, query: CallbackQuery):
 
     sc_saga_name = to_small_caps(full_saga_name)
     text = (
-        f">📂 **{sc_saga_name}**\n"
-        f">\n"
-        f">🟢 = ᴜᴘʟᴏᴀᴅᴇᴅ | 🔴 = ᴍɪssɪɴɢ\n"
-        f">sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ᴘʀᴇᴠɪᴇᴡ ᴀɴᴅ ᴜᴘʟᴏᴀᴅ:"
+        f"<blockquote>📂 <b>{sc_saga_name}</b>\n\n"
+        f"🟢 = ᴜᴘʟᴏᴀᴅᴇᴅ | 🔴 = ᴍɪssɪɴɢ\n"
+        f"sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ᴘʀᴇᴠɪᴇᴡ ᴀɴᴅ ᴜᴘʟᴏᴀᴅ:</blockquote>"
     )
     
     if query.message.photo:
@@ -200,10 +197,9 @@ async def init_upload(client: Client, query: CallbackQuery):
         
         sc_title = to_small_caps(movie["title"])
         text = (
-            f">🎬 **ʀᴇᴀᴅʏ ᴛᴏ ʀᴇᴄᴇɪᴠᴇ ғɪʟᴇs ғᴏʀ:** {sc_title}\n"
-            f">\n"
-            f">👇 **ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴏʀ ᴜᴘʟᴏᴀᴅ ᴛʜᴇ ᴠɪᴅᴇᴏ ғɪʟᴇs ɴᴏᴡ.**\n"
-            f">(ʏᴏᴜ ᴄᴀɴ sᴇɴᴅ ᴍᴜʟᴛɪᴘʟᴇ ғɪʟᴇs ᴏɴᴇ ᴀғᴛᴇʀ ᴛʜᴇ ᴏᴛʜᴇʀ.)"
+            f"<blockquote>🎬 <b>ʀᴇᴀᴅʏ ᴛᴏ ʀᴇᴄᴇɪᴠᴇ ғɪʟᴇs ғᴏʀ:</b> {sc_title}\n\n"
+            f"👇 <b>ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴏʀ ᴜᴘʟᴏᴀᴅ ᴛʜᴇ ᴠɪᴅᴇᴏ ғɪʟᴇs ɴᴏᴡ.</b>\n"
+            f"(ʏᴏᴜ ᴄᴀɴ sᴇɴᴅ ᴍᴜʟᴛɪᴘʟᴇ ғɪʟᴇs ᴏɴᴇ ᴀғᴛᴇʀ ᴛʜᴇ ᴏᴛʜᴇʀ.)</blockquote>"
         )
         
         await query.message.delete()
@@ -227,7 +223,7 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
         del WAITING_FOR_CHANNEL[query.from_user.id]
 
     current_channel = await get_target_channel()
-    channel_text = f"`{current_channel}`" if current_channel else "❌ ɴᴏᴛ sᴇᴛ"
+    channel_text = f"<code>{current_channel}</code>" if current_channel else "❌ ɴᴏᴛ sᴇᴛ"
 
     buttons = [
         [InlineKeyboardButton("➕ sᴇᴛ / ᴄʜᴀɴɢᴇ ᴄʜᴀɴɴᴇʟ", callback_data="set_new_channel")],
@@ -235,12 +231,10 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
     ]
 
     text = (
-        f">📢 **ᴄʜᴀɴɴᴇʟ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ**\n"
-        f">\n"
-        f">**ᴄᴜʀʀᴇɴᴛ ʟɪɴᴋᴇᴅ ᴄʜᴀɴɴᴇʟ:** {channel_text}\n"
-        f">\n"
-        f">ᴛʜᴇ ʙᴏᴛ ᴡɪʟʟ ᴘᴜʙʟɪsʜ ᴀʟʟ ᴍᴏᴠɪᴇ ᴘᴏsᴛs ᴛᴏ ᴛʜɪs ᴄʜᴀɴɴᴇʟ.\n"
-        f">ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇ ʙᴏᴛ ɪs ᴀᴅᴅᴇᴅ ᴀs ᴀɴ **ᴀᴅᴍɪɴ** ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ!"
+        f"<blockquote>📢 <b>ᴄʜᴀɴɴᴇʟ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b>\n\n"
+        f"<b>ᴄᴜʀʀᴇɴᴛ ʟɪɴᴋᴇᴅ ᴄʜᴀɴɴᴇʟ:</b> {channel_text}\n\n"
+        f"ᴛʜᴇ ʙᴏᴛ ᴡɪʟʟ ᴘᴜʙʟɪsʜ ᴀʟʟ ᴍᴏᴠɪᴇ ᴘᴏsᴛs ᴛᴏ ᴛʜɪs ᴄʜᴀɴɴᴇʟ.\n"
+        f"ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇ ʙᴏᴛ ɪs ᴀᴅᴅᴇᴅ ᴀs ᴀɴ <b>ᴀᴅᴍɪɴ</b> ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ!</blockquote>"
     )
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -254,11 +248,10 @@ async def ask_for_channel(client: Client, query: CallbackQuery):
 
     buttons = [[InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="manage_channel")]]
     text = (
-        ">👇 **ʜᴏᴡ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ:**\n"
-        ">\n"
-        ">𝟷. ɢᴏ ᴛᴏ ʏᴏᴜʀ ᴛᴀʀɢᴇᴛ ᴄʜᴀɴɴᴇʟ.\n"
-        ">𝟸. ғᴏʀᴡᴀʀᴅ ᴀɴʏ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ᴛʜᴀᴛ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴍᴇ ʀɪɢʜᴛ ɴᴏᴡ.\n"
-        ">(ᴏʀ, ʏᴏᴜ ᴄᴀɴ ᴊᴜsᴛ ᴛʏᴘᴇ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ɪᴅ ɪғ ʏᴏᴜ ᴋɴᴏᴡ ɪᴛ, ᴇ.ɢ., -𝟷𝟶𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿)"
+        "<blockquote>👇 <b>ʜᴏᴡ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ:</b>\n\n"
+        "𝟷. ɢᴏ ᴛᴏ ʏᴏᴜʀ ᴛᴀʀɢᴇᴛ ᴄʜᴀɴɴᴇʟ.\n"
+        "𝟸. ғᴏʀᴡᴀʀᴅ ᴀɴʏ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ᴛʜᴀᴛ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴍᴇ ʀɪɢʜᴛ ɴᴏᴡ.\n"
+        "(ᴏʀ, ʏᴏᴜ ᴄᴀɴ ᴊᴜsᴛ ᴛʏᴘᴇ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ɪᴅ ɪғ ʏᴏᴜ ᴋɴᴏᴡ ɪᴛ, ᴇ.ɢ., -𝟷𝟶𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿)</blockquote>"
     )
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -276,7 +269,7 @@ async def capture_channel_input(client: Client, message: Message):
         try:
             channel_id = int(message.text)
         except (ValueError, TypeError):
-            await message.reply_text(">❌ ɪɴᴠᴀʟɪᴅ ɪɴᴘᴜᴛ. ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴏʀ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ɪᴅ sᴛᴀʀᴛɪɴɢ ᴡɪᴛʜ -𝟷𝟶𝟶.")
+            await message.reply_text("<blockquote>❌ ɪɴᴠᴀʟɪᴅ ɪɴᴘᴜᴛ. ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴏʀ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ɪᴅ sᴛᴀʀᴛɪɴɢ ᴡɪᴛʜ -𝟷𝟶𝟶.</blockquote>")
             return
 
     await set_target_channel(channel_id)
@@ -284,11 +277,9 @@ async def capture_channel_input(client: Client, message: Message):
 
     buttons = [[InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴄʜᴀɴɴᴇʟ ᴍᴇɴᴜ", callback_data="manage_channel")]]
     text = (
-        f">✅ **ᴄʜᴀɴɴᴇʟ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪɴᴋᴇᴅ!**\n"
-        f">\n"
-        f">sᴀᴠᴇᴅ ɪᴅ: `{channel_id}`\n"
-        f">\n"
-        f">ᴍᴀᴋᴇ sᴜʀᴇ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜɪs ᴄʜᴀɴɴᴇʟ sᴏ ɪᴛ ᴄᴀɴ ᴘᴏsᴛ."
+        f"<blockquote>✅ <b>ᴄʜᴀɴɴᴇʟ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪɴᴋᴇᴅ!</b>\n\n"
+        f"sᴀᴠᴇᴅ ɪᴅ: <code>{channel_id}</code>\n\n"
+        f"ᴍᴀᴋᴇ sᴜʀᴇ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜɪs ᴄʜᴀɴɴᴇʟ sᴏ ɪᴛ ᴄᴀɴ ᴘᴏsᴛ.</blockquote>"
     )
     
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
