@@ -1,7 +1,8 @@
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import Config
-from database import movies_col, get_movie_by_order
+# IMPORT get_target_channel from database
+from database import movies_col, get_movie_by_order, get_target_channel
 from plugins.start import SAGA_CATEGORIES
 
 @Client.on_message(filters.command("post") & filters.private)
@@ -10,8 +11,10 @@ async def post_command_handler(client: Client, message: Message):
     if message.from_user.id != Config.ADMIN_ID:
         return
         
-    if not getattr(Config, "CHANNEL_ID", 0):
-        await message.reply_text("⚠️ **CHANNEL_ID** is not set in your config. Please set it first.")
+    # FETCH DYNAMICALLY FROM DATABASE
+    target_channel = await get_target_channel()
+    if not target_channel:
+        await message.reply_text("⚠️ **No channel linked!**\nUse the '📢 My Channel' button in the /start menu to link your channel first.")
         return
 
     buttons = []
@@ -87,6 +90,13 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
     order = int(query.data.split("_")[2])
     movie = await get_movie_by_order(order)
     
+    # FETCH DYNAMICALLY FROM DATABASE
+    target_channel = await get_target_channel()
+    
+    if not target_channel:
+        await query.answer("No channel linked! Link it in /start.", show_alert=True)
+        return
+        
     if not movie or not movie.get("files"):
         await query.answer("Movie or files not found!", show_alert=True)
         return
@@ -118,17 +128,17 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
     poster_url = movie.get("images", {}).get("poster_url")
 
     try:
-        # 3. Send to Channel
+        # 3. Send to target_channel
         if poster_url:
             await client.send_photo(
-                chat_id=Config.CHANNEL_ID,
+                chat_id=target_channel,
                 photo=poster_url,
                 caption=caption,
                 reply_markup=markup
             )
         else:
             await client.send_message(
-                chat_id=Config.CHANNEL_ID,
+                chat_id=target_channel,
                 text=caption,
                 reply_markup=markup
             )
@@ -138,7 +148,7 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
             f"🎬 {movie['title']}"
         )
     except Exception as e:
-        await query.message.edit_text(f"❌ **Failed to post:** {e}")
+        await query.message.edit_text(f"❌ **Failed to post:** {e}\n\n(Did you forget to add the bot as an Admin in the channel?)")
 
 @Client.on_callback_query(filters.regex("^post_menu_back$"))
 async def post_menu_back(client: Client, query: CallbackQuery):
