@@ -32,24 +32,24 @@ def get_ordinal_suffix(n: int) -> str:
 
 
 # ==========================================
-# REUSABLE POST / PREVIEW TEMPLATE
+# REUSABLE POST / PREVIEW TEMPLATE (HTML FIXED)
 # ==========================================
 POST_TEMPLATE = """\
->📁 **sᴀɢᴀ:** {saga}
->
->▶️ **ᴡᴀᴛᴄʜ ᴏʀᴅᴇʀ:** {watch_order}
+<blockquote>📁 <b>sᴀɢᴀ:</b> {saga}
 
->🎬 **ᴛɪᴛʟᴇ:** {title}
->
->🗓️ **ʏᴇᴀʀ:** {year}
->
->🏷️ **ɢᴇɴʀᴇs:** {genres}
->
->🔊 **ᴀᴜᴅɪᴏ:** {audio}
->
->📦 **ǫᴜᴀʟɪᴛʏ:** {qualities}
->
->💾 **ғɪʟᴇ sɪᴢᴇ:** {file_sizes}"""
+▶️ <b>ᴡᴀᴛᴄʜ ᴏʀᴅᴇʀ:</b> {watch_order}
+
+🎬 <b>ᴛɪᴛʟᴇ:</b> {title}
+
+🗓️ <b>ʏᴇᴀʀ:</b> {year}
+
+🏷️ <b>ɢᴇɴʀᴇs:</b> {genres}
+
+🔊 <b>ᴀᴜᴅɪᴏ:</b> {audio}
+
+📦 <b>ǫᴜᴀʟɪᴛʏ:</b> {qualities}
+
+💾 <b>ғɪʟᴇ sɪᴢᴇ:</b> {file_sizes}</blockquote>"""
 
 
 def format_movie_post(movie: dict, custom_qualities: str = None, custom_file_sizes: str = None) -> str:
