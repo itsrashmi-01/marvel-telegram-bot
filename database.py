@@ -10,6 +10,7 @@ db = db_client["marvel_db"]
 # Define BOTH variable names so all plugins work perfectly without crashing
 movies_col = db["movies"]
 movies_collection = db["movies"]
+settings_col = db["settings"]  # Added for Channel Management
 
 # TMDB Genre ID mapping
 GENRE_MAP = {
@@ -81,7 +82,7 @@ async def init_marvel_list(marvel_data: list, bot_username: str = ""):
     return inserted
 
 async def add_or_update_file(watch_order: int, quality: str, file_size: str, file_id: str, download_url: str = ""):
-    """Adds or updates a file quality resolution with download link."""
+    """Adds or updates a single file quality resolution with download link."""
     file_entry = {
         "quality": quality,
         "file_size": file_size,
@@ -104,6 +105,23 @@ async def add_or_update_file(watch_order: int, quality: str, file_size: str, fil
         }
     )
 
+async def save_movie_files(watch_order: int, new_files: list):
+    """Saves multiple files with their Telegram IDs and MediaFire links."""
+    for f in new_files:
+        # Remove existing entry of the same quality to avoid duplicates
+        await movies_col.update_one(
+            {"watch_order": watch_order},
+            {"$pull": {"files": {"quality": f["quality"]}}}
+        )
+        # Push the new file object
+        await movies_col.update_one(
+            {"watch_order": watch_order},
+            {
+                "$push": {"files": f},
+                "$set": {"status": "Available"}
+            }
+        )
+
 async def get_movie_by_order(watch_order: int):
     """Fetch movie details by its watch order number."""
     return await movies_col.find_one({"watch_order": watch_order})
@@ -112,3 +130,16 @@ async def get_all_movies():
     """Fetch all movies sorted by watch order."""
     cursor = movies_col.find().sort("watch_order", 1)
     return await cursor.to_list(length=200)
+
+async def get_target_channel():
+    """Fetches the saved channel ID from the database."""
+    doc = await settings_col.find_one({"_id": "bot_settings"})
+    return doc.get("channel_id") if doc else None
+
+async def set_target_channel(channel_id: int):
+    """Saves or updates the channel ID in the database."""
+    await settings_col.update_one(
+        {"_id": "bot_settings"},
+        {"$set": {"channel_id": channel_id}},
+        upsert=True
+    )
