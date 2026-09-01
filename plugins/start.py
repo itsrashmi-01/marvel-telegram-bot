@@ -4,6 +4,9 @@ from config import Config
 from plugins.list import RAW_MARVEL_LIST
 from database import movies_col, get_target_channel, set_target_channel, get_movie_by_order, init_marvel_list
 
+# --- IMPORTING YOUR TEMPLATE FUNCTIONS ---
+from template import format_movie_post, to_small_caps
+
 # --- STATE MEMORY ---
 UPLOAD_STATE = {}
 WAITING_FOR_CHANNEL = {}
@@ -25,27 +28,40 @@ async def start_handler(client: Client, message: Message):
     
     buttons = []
     if is_admin:
-        buttons.append([InlineKeyboardButton("📤 Upload Movie", callback_data="upload_menu")])
-        buttons.append([InlineKeyboardButton("📢 My Channel", callback_data="manage_channel")])
+        buttons.append([InlineKeyboardButton("📤 ᴜᴘʟᴏᴀᴅ ᴍᴏᴠɪᴇ", callback_data="upload_menu")])
+        buttons.append([InlineKeyboardButton("📢 ᴍʏ ᴄʜᴀɴɴᴇʟ", callback_data="manage_channel")])
         
+    user_name = to_small_caps(message.from_user.first_name)
+    text = (
+        f">👋 **ᴡᴇʟᴄᴏᴍᴇ {user_name}!**\n"
+        f">\n"
+        f">ɪ ᴀᴍ ᴛʜᴇ ᴍᴀʀᴠᴇʟ ᴜɴɪᴠᴇʀsᴇ ᴍᴇᴅɪᴀ ʙᴏᴛ.\n"
+        f">ᴄʟɪᴄᴋ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ."
+    )
+    
     await message.reply_text(
-        f"👋 Welcome **{message.from_user.first_name}**!\n\n"
-        f"I am the Marvel Universe Media Bot. Click a button below to manage the database.",
+        text,
         reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
     )
 
 @Client.on_callback_query(filters.regex("^main_menu$"))
 async def return_main_menu(client: Client, query: CallbackQuery):
     buttons = [
-        [InlineKeyboardButton("📤 Upload Movie", callback_data="upload_menu")],
-        [InlineKeyboardButton("📢 My Channel", callback_data="manage_channel")]
+        [InlineKeyboardButton("📤 ᴜᴘʟᴏᴀᴅ ᴍᴏᴠɪᴇ", callback_data="upload_menu")],
+        [InlineKeyboardButton("📢 ᴍʏ ᴄʜᴀɴɴᴇʟ", callback_data="manage_channel")]
     ]
-    # If returning from a photo preview, we need to delete the photo and send text
+    
+    text = (
+        ">👋 **ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ ᴛᴏ ᴛʜᴇ ᴍᴀɪɴ ᴍᴇɴᴜ!**\n"
+        ">\n"
+        ">ᴄʟɪᴄᴋ ᴀ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴍᴀɴᴀɢᴇ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ."
+    )
+    
     if query.message.photo:
         await query.message.delete()
-        await client.send_message(query.message.chat.id, "👋 Welcome back to the main menu!", reply_markup=InlineKeyboardMarkup(buttons))
+        await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        await query.message.edit_text("👋 Welcome back to the main menu!", reply_markup=InlineKeyboardMarkup(buttons))
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================
@@ -58,11 +74,12 @@ async def upload_menu_selection(client: Client, query: CallbackQuery):
 
     buttons = []
     for code, full_name in SAGA_CATEGORIES.items():
-        buttons.append([InlineKeyboardButton(f"📂 {full_name}", callback_data=f"saga_{code}_1")])
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📂 {full_name}"), callback_data=f"saga_{code}_1")])
         
-    buttons.append([InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="main_menu")])
 
-    text = "📤 **Select a Universe/Saga to view its movies:**"
+    text = ">📤 **sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴠɪᴇᴡ ɪᴛs ᴍᴏᴠɪᴇs:**"
+    
     if query.message.photo:
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -98,21 +115,27 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     buttons = []
     for item in current_items:
         status_icon = "🟢" if item["order"] in uploaded_set else "🔴"
-        btn_text = f"{status_icon} {item['title']}"
+        btn_text = f"{status_icon} " + to_small_caps(item['title'])
         buttons.append([InlineKeyboardButton(btn_text, callback_data=f"preview_{item['order']}")])
         
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"saga_{code}_{page-1}"))
+        nav.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"saga_{code}_{page-1}"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"saga_{code}_{page+1}"))
+        nav.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"saga_{code}_{page+1}"))
     
     if nav:
         buttons.append(nav)
         
-    buttons.append([InlineKeyboardButton("🔙 Back to Sagas", callback_data="upload_menu")])
+    buttons.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs", callback_data="upload_menu")])
 
-    text = f"📂 **{full_saga_name}**\n\n🟢 = Uploaded | 🔴 = Missing\nSelect a movie to preview and upload:"
+    sc_saga_name = to_small_caps(full_saga_name)
+    text = (
+        f">📂 **{sc_saga_name}**\n"
+        f">\n"
+        f">🟢 = ᴜᴘʟᴏᴀᴅᴇᴅ | 🔴 = ᴍɪssɪɴɢ\n"
+        f">sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ᴘʀᴇᴠɪᴇᴡ ᴀɴᴅ ᴜᴘʟᴏᴀᴅ:"
+    )
     
     if query.message.photo:
         await query.message.delete()
@@ -120,49 +143,37 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     else:
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
+
 @Client.on_callback_query(filters.regex(r"^preview_(\d+)$"))
 async def preview_movie(client: Client, query: CallbackQuery):
-    """Shows the Movie Preview Card with Poster and 'Send Files' button."""
     order = int(query.data.split("_")[1])
     movie = await get_movie_by_order(order)
     
-    # --- AUTO-FETCH LOGIC IF NOT IN DATABASE ---
     if not movie:
-        await query.answer("Fetching TMDB metadata... please wait a second.", show_alert=False)
+        await query.answer("ғᴇᴛᴄʜɪɴɢ ᴛᴍᴅʙ ᴍᴇᴛᴀᴅᴀᴛᴀ... ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ.", show_alert=False)
         
-        # Grab the raw details from the list
         raw_movie = next((m for m in RAW_MARVEL_LIST if m["order"] == order), None)
         if not raw_movie:
-            await query.answer("Error: Movie not found in raw list.", show_alert=True)
+            await query.answer("ᴇʀʀᴏʀ: ᴍᴏᴠɪᴇ ɴᴏᴛ ғᴏᴜɴᴅ.", show_alert=True)
             return
             
-        # Initialize this single movie in the database on-the-fly
         bot_info = await client.get_me()
         await init_marvel_list([raw_movie], bot_username=bot_info.username)
-        
-        # Fetch it again now that it exists
         movie = await get_movie_by_order(order)
         
         if not movie:
-            await query.answer("Failed to initialize movie in database.", show_alert=True)
+            await query.answer("ғᴀɪʟᴇᴅ ᴛᴏ ɪɴɪᴛɪᴀʟɪᴢᴇ ᴍᴏᴠɪᴇ.", show_alert=True)
             return
-    # ------------------------------------------
 
-    poster_url = movie.get("images", {}).get("poster_url", "")
-    genres_str = ", ".join(movie.get("genres", []))
-    
-    caption = (
-        f"🎬 **{movie['title']} ({movie.get('release_year', 'N/A')})**\n\n"
-        f"📂 **Saga:** {movie.get('saga')}\n"
-        f"🏷️ **Genres:** {genres_str}\n"
-        f"⭐ **Rating:** {movie.get('rating', 'N/A')}/10\n\n"
-        f"👇 Click the button below when you are ready to upload files."
-    )
-    
+    # --- USE THE TEMPLATE FOR THE PREVIEW CAPTION ---
+    caption = format_movie_post(movie)
+
     buttons = [
-        [InlineKeyboardButton("📥 Send All Movie Files", callback_data=f"init_upload_{order}")],
-        [InlineKeyboardButton("🔙 Back to List", callback_data="upload_menu")]
+        [InlineKeyboardButton("📥 sᴇɴᴅ ᴀʟʟ ᴍᴏᴠɪᴇ ғɪʟᴇs", callback_data=f"init_upload_{order}")],
+        [InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ʟɪsᴛ", callback_data="upload_menu")]
     ]
+    
+    poster_url = movie.get("images", {}).get("poster_url", "")
     
     await query.message.delete()
     if poster_url:
@@ -181,22 +192,27 @@ async def preview_movie(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^init_upload_(\d+)$"))
 async def init_upload(client: Client, query: CallbackQuery):
-    """Activates UPLOAD_STATE and tells upload.py to start intercepting files."""
     order = int(query.data.split("_")[2])
     movie = next((m for m in RAW_MARVEL_LIST if m["order"] == order), None)
     
     if movie:
         UPLOAD_STATE[query.from_user.id] = {"watch_order": order, "title": movie["title"]}
         
+        sc_title = to_small_caps(movie["title"])
+        text = (
+            f">🎬 **ʀᴇᴀᴅʏ ᴛᴏ ʀᴇᴄᴇɪᴠᴇ ғɪʟᴇs ғᴏʀ:** {sc_title}\n"
+            f">\n"
+            f">👇 **ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴏʀ ᴜᴘʟᴏᴀᴅ ᴛʜᴇ ᴠɪᴅᴇᴏ ғɪʟᴇs ɴᴏᴡ.**\n"
+            f">(ʏᴏᴜ ᴄᴀɴ sᴇɴᴅ ᴍᴜʟᴛɪᴘʟᴇ ғɪʟᴇs ᴏɴᴇ ᴀғᴛᴇʀ ᴛʜᴇ ᴏᴛʜᴇʀ.)"
+        )
+        
         await query.message.delete()
         await client.send_message(
             chat_id=query.message.chat.id,
-            text=f"🎬 **Ready to receive files for:** {movie['title']}\n\n"
-                 f"👇 **Please forward or upload the video files now.**\n"
-                 f"(You can send multiple files one after the other.)"
+            text=text
         )
     else:
-        await query.answer("Error setting upload state.", show_alert=True)
+        await query.answer("ᴇʀʀᴏʀ sᴇᴛᴛɪɴɢ ᴜᴘʟᴏᴀᴅ sᴛᴀᴛᴇ.", show_alert=True)
 
 
 # ==========================================
@@ -211,19 +227,23 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
         del WAITING_FOR_CHANNEL[query.from_user.id]
 
     current_channel = await get_target_channel()
-    channel_text = f"`{current_channel}`" if current_channel else "❌ Not Set"
+    channel_text = f"`{current_channel}`" if current_channel else "❌ ɴᴏᴛ sᴇᴛ"
 
     buttons = [
-        [InlineKeyboardButton("➕ Set / Change Channel", callback_data="set_new_channel")],
-        [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")]
+        [InlineKeyboardButton("➕ sᴇᴛ / ᴄʜᴀɴɢᴇ ᴄʜᴀɴɴᴇʟ", callback_data="set_new_channel")],
+        [InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="main_menu")]
     ]
 
-    await query.message.edit_text(
-        f"📢 **Channel Management**\n\n"
-        f"**Current Linked Channel:** {channel_text}\n\n"
-        f"The bot will publish all movie posts to this channel. Make sure the bot is added as an **Admin** in the channel!",
-        reply_markup=InlineKeyboardMarkup(buttons)
+    text = (
+        f">📢 **ᴄʜᴀɴɴᴇʟ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ**\n"
+        f">\n"
+        f">**ᴄᴜʀʀᴇɴᴛ ʟɪɴᴋᴇᴅ ᴄʜᴀɴɴᴇʟ:** {channel_text}\n"
+        f">\n"
+        f">ᴛʜᴇ ʙᴏᴛ ᴡɪʟʟ ᴘᴜʙʟɪsʜ ᴀʟʟ ᴍᴏᴠɪᴇ ᴘᴏsᴛs ᴛᴏ ᴛʜɪs ᴄʜᴀɴɴᴇʟ.\n"
+        f">ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇ ʙᴏᴛ ɪs ᴀᴅᴅᴇᴅ ᴀs ᴀɴ **ᴀᴅᴍɪɴ** ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ!"
     )
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 @Client.on_callback_query(filters.regex("^set_new_channel$"))
 async def ask_for_channel(client: Client, query: CallbackQuery):
@@ -232,14 +252,16 @@ async def ask_for_channel(client: Client, query: CallbackQuery):
 
     WAITING_FOR_CHANNEL[query.from_user.id] = True
 
-    buttons = [[InlineKeyboardButton("❌ Cancel", callback_data="manage_channel")]]
-    await query.message.edit_text(
-        "👇 **How to link your channel:**\n\n"
-        "1. Go to your target channel.\n"
-        "2. Forward ANY message from that channel to me right now.\n"
-        "(Or, you can just type the channel ID if you know it, e.g., -100123456789)",
-        reply_markup=InlineKeyboardMarkup(buttons)
+    buttons = [[InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="manage_channel")]]
+    text = (
+        ">👇 **ʜᴏᴡ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ:**\n"
+        ">\n"
+        ">𝟷. ɢᴏ ᴛᴏ ʏᴏᴜʀ ᴛᴀʀɢᴇᴛ ᴄʜᴀɴɴᴇʟ.\n"
+        ">𝟸. ғᴏʀᴡᴀʀᴅ ᴀɴʏ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ᴛʜᴀᴛ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴍᴇ ʀɪɢʜᴛ ɴᴏᴡ.\n"
+        ">(ᴏʀ, ʏᴏᴜ ᴄᴀɴ ᴊᴜsᴛ ᴛʏᴘᴇ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ɪᴅ ɪғ ʏᴏᴜ ᴋɴᴏᴡ ɪᴛ, ᴇ.ɢ., -𝟷𝟶𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿)"
     )
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 @Client.on_message(filters.private & filters.user(Config.ADMIN_ID))
 async def capture_channel_input(client: Client, message: Message):
@@ -254,16 +276,19 @@ async def capture_channel_input(client: Client, message: Message):
         try:
             channel_id = int(message.text)
         except (ValueError, TypeError):
-            await message.reply_text("❌ Invalid input. Please forward a message from your channel or send a valid numeric ID starting with -100.")
+            await message.reply_text(">❌ ɪɴᴠᴀʟɪᴅ ɪɴᴘᴜᴛ. ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴏʀ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ɪᴅ sᴛᴀʀᴛɪɴɢ ᴡɪᴛʜ -𝟷𝟶𝟶.")
             return
 
     await set_target_channel(channel_id)
     del WAITING_FOR_CHANNEL[message.from_user.id]
 
-    buttons = [[InlineKeyboardButton("🔙 Back to Channel Menu", callback_data="manage_channel")]]
-    await message.reply_text(
-        f"✅ **Channel successfully linked!**\n\n"
-        f"Saved ID: `{channel_id}`\n\n"
-        f"Make sure to add the bot as an Admin in this channel so it can post.",
-        reply_markup=InlineKeyboardMarkup(buttons)
+    buttons = [[InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴄʜᴀɴɴᴇʟ ᴍᴇɴᴜ", callback_data="manage_channel")]]
+    text = (
+        f">✅ **ᴄʜᴀɴɴᴇʟ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪɴᴋᴇᴅ!**\n"
+        f">\n"
+        f">sᴀᴠᴇᴅ ɪᴅ: `{channel_id}`\n"
+        f">\n"
+        f">ᴍᴀᴋᴇ sᴜʀᴇ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜɪs ᴄʜᴀɴɴᴇʟ sᴏ ɪᴛ ᴄᴀɴ ᴘᴏsᴛ."
     )
+    
+    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
