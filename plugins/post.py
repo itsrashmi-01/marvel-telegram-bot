@@ -1,9 +1,11 @@
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import Config
-# IMPORT get_target_channel from database
 from database import movies_col, get_movie_by_order, get_target_channel
 from plugins.start import SAGA_CATEGORIES
+
+# --- IMPORTING YOUR TEMPLATE FUNCTIONS ---
+from template import format_movie_post, get_download_button, to_small_caps
 
 @Client.on_message(filters.command("post") & filters.private)
 async def post_command_handler(client: Client, message: Message):
@@ -14,18 +16,23 @@ async def post_command_handler(client: Client, message: Message):
     # FETCH DYNAMICALLY FROM DATABASE
     target_channel = await get_target_channel()
     if not target_channel:
-        await message.reply_text("⚠️ **No channel linked!**\nUse the '📢 My Channel' button in the /start menu to link your channel first.")
+        text = to_small_caps(
+            ">⚠️ **ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ!**\n"
+            ">ᴜsᴇ ᴛʜᴇ '📢 ᴍʏ ᴄʜᴀɴɴᴇʟ' ʙᴜᴛᴛᴏɴ ɪɴ ᴛʜᴇ /sᴛᴀʀᴛ ᴍᴇɴᴜ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ."
+        )
+        await message.reply_text(text)
         return
 
     buttons = []
     for code, full_name in SAGA_CATEGORIES.items():
-        buttons.append([InlineKeyboardButton(f"📢 {full_name}", callback_data=f"post_saga_{code}_1")])
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}_1")])
         
-    await message.reply_text(
-        "📢 **Select a Universe/Saga to publish a movie from:**\n"
-        "(Only movies with uploaded files will be shown here)",
-        reply_markup=InlineKeyboardMarkup(buttons)
+    text = to_small_caps(
+        ">📢 **sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:**\n"
+        ">(ᴏɴʟʏ ᴍᴏᴠɪᴇs ᴡɪᴛʜ ᴜᴘʟᴏᴀᴅᴇᴅ ғɪʟᴇs ᴡɪʟʟ ʙᴇ sʜᴏᴡɴ ʜᴇʀᴇ)"
     )
+    
+    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 @Client.on_callback_query(filters.regex(r"^post_saga_(.+)_(\d+)$"))
 async def post_saga_pagination(client: Client, query: CallbackQuery):
@@ -38,7 +45,7 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
     full_saga_name = SAGA_CATEGORIES.get(code)
     
     if not full_saga_name:
-        await query.answer("Invalid Saga", show_alert=True)
+        await query.answer(to_small_caps("ɪɴᴠᴀʟɪᴅ sᴀɢᴀ"), show_alert=True)
         return
 
     # Fetch ONLY uploaded/available movies for this saga
@@ -47,7 +54,7 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
     ).sort("saga_rank", 1).to_list(length=100)
 
     if not available_movies:
-        await query.answer("No movies uploaded in this saga yet!", show_alert=True)
+        await query.answer(to_small_caps("ɴᴏ ᴍᴏᴠɪᴇs ᴜᴘʟᴏᴀᴅᴇᴅ ɪɴ ᴛʜɪs sᴀɢᴀ ʏᴇᴛ!"), show_alert=True)
         return
 
     # Pagination Logic
@@ -61,25 +68,28 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
     
     buttons = []
     for item in current_items:
-        btn_text = f"📢 {item['title']} ({item.get('release_year', '')})"
+        btn_text = to_small_caps(f"📢 {item['title']} ({item.get('release_year', '')})")
         buttons.append([InlineKeyboardButton(btn_text, callback_data=f"confirm_post_{item['watch_order']}")])
         
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"post_saga_{code}_{page-1}"))
+        nav.append(InlineKeyboardButton(to_small_caps("⬅️ ᴘʀᴇᴠ"), callback_data=f"post_saga_{code}_{page-1}"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"post_saga_{code}_{page+1}"))
+        nav.append(InlineKeyboardButton(to_small_caps("ɴᴇxᴛ ➡️"), callback_data=f"post_saga_{code}_{page+1}"))
     
     if nav:
         buttons.append(nav)
         
-    buttons.append([InlineKeyboardButton("🔙 Back to Sagas", callback_data="post_menu_back")])
+    buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs"), callback_data="post_menu_back")])
 
-    await query.message.edit_text(
-        f"📢 **Publishing from: {full_saga_name}**\n\n"
-        f"Select a movie to generate a channel post:",
-        reply_markup=InlineKeyboardMarkup(buttons)
+    sc_saga_name = to_small_caps(full_saga_name)
+    text = (
+        f">📢 **ᴘᴜʙʟɪsʜɪɴɢ ғʀᴏᴍ: {sc_saga_name}**\n"
+        f">\n"
+        f">sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ:"
     )
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 @Client.on_callback_query(filters.regex(r"^confirm_post_(\d+)$"))
 async def publish_to_channel(client: Client, query: CallbackQuery):
@@ -90,41 +100,27 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
     order = int(query.data.split("_")[2])
     movie = await get_movie_by_order(order)
     
-    # FETCH DYNAMICALLY FROM DATABASE
     target_channel = await get_target_channel()
     
     if not target_channel:
-        await query.answer("No channel linked! Link it in /start.", show_alert=True)
+        await query.answer(to_small_caps("ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ! ʟɪɴᴋ ɪᴛ ɪɴ /sᴛᴀʀᴛ."), show_alert=True)
         return
         
     if not movie or not movie.get("files"):
-        await query.answer("Movie or files not found!", show_alert=True)
+        await query.answer(to_small_caps("ᴍᴏᴠɪᴇ ᴏʀ ғɪʟᴇs ɴᴏᴛ ғᴏᴜɴᴅ!"), show_alert=True)
         return
 
-    await query.answer("Publishing to channel...")
+    await query.answer(to_small_caps("ᴘᴜʙʟɪsʜɪɴɢ ᴛᴏ ᴄʜᴀɴɴᴇʟ..."))
     
-    # 1. Format the Post Caption
-    genres_str = ", ".join(movie.get("genres", []))
-    caption = (
-        f"🎬 **{movie['title']} ({movie.get('release_year', 'N/A')})**\n\n"
-        f"📂 **Saga:** {movie.get('saga')}\n"
-        f"🔊 **Audio:** {movie.get('language')}\n"
-        f"🏷️ **Genres:** {genres_str}\n"
-        f"⭐ **Rating:** {movie.get('rating', 'N/A')}/10\n\n"
-        f"📝 **Synopsis:**\n_{movie.get('overview', 'No synopsis available.')}_\n\n"
-        f"👇 **Click below to get your files!**"
-    )
+    # 1. Format the Post Caption using template.py
+    caption = format_movie_post(movie)
 
-    # 2. Build the deep-link button
+    # 2. Build the deep-link button using template.py
     bot_info = await client.get_me()
     bot_username = bot_info.username
     deep_link = f"https://t.me/{bot_username}?start=get_{order}"
     
-    buttons = [
-        [InlineKeyboardButton("📥 Download Movie (All Qualities)", url=deep_link)]
-    ]
-    
-    markup = InlineKeyboardMarkup(buttons)
+    markup = get_download_button(deep_link)
     poster_url = movie.get("images", {}).get("poster_url")
 
     try:
@@ -143,21 +139,27 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
                 reply_markup=markup
             )
             
-        await query.message.edit_text(
-            f"✅ **Successfully published to channel!**\n\n"
-            f"🎬 {movie['title']}"
+        sc_title = to_small_caps(movie['title'])
+        success_text = (
+            f">✅ **sᴜᴄᴄᴇssғᴜʟʟʏ ᴘᴜʙʟɪsʜᴇᴅ ᴛᴏ ᴄʜᴀɴɴᴇʟ!**\n"
+            f">\n"
+            f">🎬 {sc_title}"
         )
+        await query.message.edit_text(success_text)
     except Exception as e:
-        await query.message.edit_text(f"❌ **Failed to post:** {e}\n\n(Did you forget to add the bot as an Admin in the channel?)")
+        error_text = to_small_caps(
+            f">❌ **ғᴀɪʟᴇᴅ ᴛᴏ ᴘᴏsᴛ:** {e}\n"
+            f">\n"
+            f">(ᴅɪᴅ ʏᴏᴜ ғᴏʀɢᴇᴛ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ?)"
+        )
+        await query.message.edit_text(error_text)
 
 @Client.on_callback_query(filters.regex("^post_menu_back$"))
 async def post_menu_back(client: Client, query: CallbackQuery):
     """Returns to the main post saga menu."""
     buttons = []
     for code, full_name in SAGA_CATEGORIES.items():
-        buttons.append([InlineKeyboardButton(f"📢 {full_name}", callback_data=f"post_saga_{code}_1")])
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}_1")])
         
-    await query.message.edit_text(
-        "📢 **Select a Universe/Saga to publish a movie from:**",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+    text = to_small_caps(">📢 **sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:**")
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
