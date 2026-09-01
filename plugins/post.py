@@ -16,9 +16,9 @@ async def post_command_handler(client: Client, message: Message):
     # FETCH DYNAMICALLY FROM DATABASE
     target_channel = await get_target_channel()
     if not target_channel:
-        text = to_small_caps(
-            ">⚠️ **ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ!**\n"
-            ">ᴜsᴇ ᴛʜᴇ '📢 ᴍʏ ᴄʜᴀɴɴᴇʟ' ʙᴜᴛᴛᴏɴ ɪɴ ᴛʜᴇ /sᴛᴀʀᴛ ᴍᴇɴᴜ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ."
+        text = (
+            "<blockquote>⚠️ <b>ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ!</b>\n"
+            "ᴜsᴇ ᴛʜᴇ '📢 ᴍʏ ᴄʜᴀɴɴᴇʟ' ʙᴜᴛᴛᴏɴ ɪɴ ᴛʜᴇ /start ᴍᴇɴᴜ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ.</blockquote>"
         )
         await message.reply_text(text)
         return
@@ -27,9 +27,9 @@ async def post_command_handler(client: Client, message: Message):
     for code, full_name in SAGA_CATEGORIES.items():
         buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}_1")])
         
-    text = to_small_caps(
-        ">📢 **sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:**\n"
-        ">(ᴏɴʟʏ ᴍᴏᴠɪᴇs ᴡɪᴛʜ ᴜᴘʟᴏᴀᴅᴇᴅ ғɪʟᴇs ᴡɪʟʟ ʙᴇ sʜᴏᴡɴ ʜᴇʀᴇ)"
+    text = (
+        "<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:</b>\n"
+        "(ᴏɴʟʏ ᴍᴏᴠɪᴇs ᴡɪᴛʜ ᴜᴘʟᴏᴀᴅᴇᴅ ғɪʟᴇs ᴡɪʟʟ ʙᴇ sʜᴏᴡɴ ʜᴇʀᴇ)</blockquote>"
     )
     
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -45,7 +45,7 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
     full_saga_name = SAGA_CATEGORIES.get(code)
     
     if not full_saga_name:
-        await query.answer(to_small_caps("ɪɴᴠᴀʟɪᴅ sᴀɢᴀ"), show_alert=True)
+        await query.answer("ɪɴᴠᴀʟɪᴅ sᴀɢᴀ", show_alert=True)
         return
 
     # Fetch ONLY uploaded/available movies for this saga
@@ -54,7 +54,7 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
     ).sort("saga_rank", 1).to_list(length=100)
 
     if not available_movies:
-        await query.answer(to_small_caps("ɴᴏ ᴍᴏᴠɪᴇs ᴜᴘʟᴏᴀᴅᴇᴅ ɪɴ ᴛʜɪs sᴀɢᴀ ʏᴇᴛ!"), show_alert=True)
+        await query.answer("ɴᴏ ᴍᴏᴠɪᴇs ᴜᴘʟᴏᴀᴅᴇᴅ ɪɴ ᴛʜɪs sᴀɢᴀ ʏᴇᴛ!", show_alert=True)
         return
 
     # Pagination Logic
@@ -73,20 +73,19 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
         
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton(to_small_caps("⬅️ ᴘʀᴇᴠ"), callback_data=f"post_saga_{code}_{page-1}"))
+        nav.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"post_saga_{code}_{page-1}"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton(to_small_caps("ɴᴇxᴛ ➡️"), callback_data=f"post_saga_{code}_{page+1}"))
+        nav.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"post_saga_{code}_{page+1}"))
     
     if nav:
         buttons.append(nav)
         
-    buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs"), callback_data="post_menu_back")])
+    buttons.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs", callback_data="post_menu_back")])
 
     sc_saga_name = to_small_caps(full_saga_name)
     text = (
-        f">📢 **ᴘᴜʙʟɪsʜɪɴɢ ғʀᴏᴍ: {sc_saga_name}**\n"
-        f">\n"
-        f">sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ:"
+        f"<blockquote>📢 <b>ᴘᴜʙʟɪsʜɪɴɢ ғʀᴏᴍ: {sc_saga_name}</b>\n\n"
+        f"sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ:</blockquote>"
     )
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -103,14 +102,14 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
     target_channel = await get_target_channel()
     
     if not target_channel:
-        await query.answer(to_small_caps("ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ! ʟɪɴᴋ ɪᴛ ɪɴ /sᴛᴀʀᴛ."), show_alert=True)
+        await query.answer("ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ! ʟɪɴᴋ ɪᴛ ɪɴ /start.", show_alert=True)
         return
         
     if not movie or not movie.get("files"):
-        await query.answer(to_small_caps("ᴍᴏᴠɪᴇ ᴏʀ ғɪʟᴇs ɴᴏᴛ ғᴏᴜɴᴅ!"), show_alert=True)
+        await query.answer("ᴍᴏᴠɪᴇ ᴏʀ ғɪʟᴇs ɴᴏᴛ ғᴏᴜɴᴅ!", show_alert=True)
         return
 
-    await query.answer(to_small_caps("ᴘᴜʙʟɪsʜɪɴɢ ᴛᴏ ᴄʜᴀɴɴᴇʟ..."))
+    await query.answer("ᴘᴜʙʟɪsʜɪɴɢ ᴛᴏ ᴄʜᴀɴɴᴇʟ...")
     
     # 1. Format the Post Caption using template.py
     caption = format_movie_post(movie)
@@ -141,16 +140,15 @@ async def publish_to_channel(client: Client, query: CallbackQuery):
             
         sc_title = to_small_caps(movie['title'])
         success_text = (
-            f">✅ **sᴜᴄᴄᴇssғᴜʟʟʏ ᴘᴜʙʟɪsʜᴇᴅ ᴛᴏ ᴄʜᴀɴɴᴇʟ!**\n"
-            f">\n"
-            f">🎬 {sc_title}"
+            f"<blockquote>✅ <b>sᴜᴄᴄᴇssғᴜʟʟʏ ᴘᴜʙʟɪsʜᴇᴅ ᴛᴏ ᴄʜᴀɴɴᴇʟ!</b>\n\n"
+            f"🎬 {sc_title}</blockquote>"
         )
         await query.message.edit_text(success_text)
     except Exception as e:
-        error_text = to_small_caps(
-            f">❌ **ғᴀɪʟᴇᴅ ᴛᴏ ᴘᴏsᴛ:** {e}\n"
-            f">\n"
-            f">(ᴅɪᴅ ʏᴏᴜ ғᴏʀɢᴇᴛ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ?)"
+        sc_error = to_small_caps(str(e))
+        error_text = (
+            f"<blockquote>❌ <b>ғᴀɪʟᴇᴅ ᴛᴏ ᴘᴏsᴛ:</b> {sc_error}\n\n"
+            f"(ᴅɪᴅ ʏᴏᴜ ғᴏʀɢᴇᴛ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ?)</blockquote>"
         )
         await query.message.edit_text(error_text)
 
@@ -161,5 +159,5 @@ async def post_menu_back(client: Client, query: CallbackQuery):
     for code, full_name in SAGA_CATEGORIES.items():
         buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}_1")])
         
-    text = to_small_caps(">📢 **sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:**")
+    text = "<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:</b></blockquote>"
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
