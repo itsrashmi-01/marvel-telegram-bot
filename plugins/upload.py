@@ -4,6 +4,7 @@ from config import Config
 from plugins.start import UPLOAD_STATE
 from database import save_movie_files
 from extractor import extract_file_info
+from template import to_small_caps # --- IMPORTED TO_SMALL_CAPS ---
 
 @Client.on_message((filters.document | filters.video) & filters.private)
 async def handle_media(client: Client, message: Message):
@@ -12,7 +13,7 @@ async def handle_media(client: Client, message: Message):
     
     user_state = UPLOAD_STATE.get(message.from_user.id)
     if not user_state:
-        await message.reply_text("⚠️ Please select a movie from the /start menu first.")
+        await message.reply_text(">⚠️ ᴘʟᴇᴀsᴇ sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ ᴛʜᴇ /start ᴍᴇɴᴜ ғɪʀsᴛ.")
         return
 
     # Initialize the file array and status if this is the first file
@@ -21,7 +22,7 @@ async def handle_media(client: Client, message: Message):
         user_state["status"] = "receiving"
 
     if user_state["status"] != "receiving":
-        await message.reply_text("⚠️ Currently waiting for MediaFire links. Please finish the current step.")
+        await message.reply_text(">⚠️ ᴄᴜʀʀᴇɴᴛʟʏ ᴡᴀɪᴛɪɴɢ ғᴏʀ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs. ᴘʟᴇᴀsᴇ ғɪɴɪsʜ ᴛʜᴇ ᴄᴜʀʀᴇɴᴛ sᴛᴇᴘ.")
         return
 
     # 1. Extract File Metadata
@@ -45,21 +46,25 @@ async def handle_media(client: Client, message: Message):
     })
 
     # 4. Generate Summary Text
-    title = user_state["title"]
+    sc_title = to_small_caps(user_state["title"])
     count = len(user_state["files"])
     qualities = [f["quality"] for f in user_state["files"]]
+    sc_qualities = to_small_caps(', '.join(qualities))
     
     summary_text = (
-        f"📥 **{title}**\n\n"
-        f"✅ {count} file(s) received & forwarded.\n"
-        f"📺 **Qualities:** {', '.join(qualities)}\n\n"
-        f"Send more files, or click Confirm."
+        f">📥 **{sc_title}**\n"
+        f">\n"
+        f">✅ {count} ғɪʟᴇ(s) ʀᴇᴄᴇɪᴠᴇᴅ & ғᴏʀᴡᴀʀᴅᴇᴅ.\n"
+        f">📺 **ǫᴜᴀʟɪᴛɪᴇs:** {sc_qualities}\n"
+        f">\n"
+        f">sᴇɴᴅ ᴍᴏʀᴇ ғɪʟᴇs, ᴏʀ ᴄʟɪᴄᴋ ᴄᴏɴғɪʀᴍ."
     )
     
-    markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Confirm & Add Links", callback_data="confirm_files")],
-        [InlineKeyboardButton("❌ Cancel Upload", callback_data="cancel_upload")]
-    ])
+    buttons = [
+        [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ & ᴀᴅᴅ ʟɪɴᴋs", callback_data="confirm_files")],
+        [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ ᴜᴘʟᴏᴀᴅ", callback_data="cancel_upload")]
+    ]
+    markup = InlineKeyboardMarkup(buttons)
 
     # 5. Edit the existing status message or send a new one
     if "status_msg_id" in user_state:
@@ -81,7 +86,7 @@ async def start_mediafire_collection(client: Client, query: CallbackQuery):
         
     user_state = UPLOAD_STATE.get(query.from_user.id)
     if not user_state or not user_state.get("files"):
-        await query.answer("No files found.", show_alert=True)
+        await query.answer(to_small_caps("ɴᴏ ғɪʟᴇs ғᴏᴜɴᴅ."), show_alert=True)
         return
 
     # Transition state to asking for links
@@ -89,11 +94,16 @@ async def start_mediafire_collection(client: Client, query: CallbackQuery):
     user_state["mf_index"] = 0
     
     first_file = user_state["files"][0]
-    await query.message.edit_text(
-        f"🔗 **MediaFire Links Required**\n\n"
-        f"Please send the MediaFire link for:\n"
-        f"👉 **{first_file['quality']}** ({first_file['file_size']})"
+    sc_quality = to_small_caps(first_file['quality'])
+    sc_size = to_small_caps(first_file['file_size'])
+    
+    text = (
+        f">🔗 **ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs ʀᴇǫᴜɪʀᴇᴅ**\n"
+        f">\n"
+        f">ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
+        f">👉 **{sc_quality}** ({sc_size})"
     )
+    await query.message.edit_text(text)
 
 @Client.on_message(filters.text & filters.private)
 async def handle_mediafire_links(client: Client, message: Message):
@@ -116,21 +126,31 @@ async def handle_mediafire_links(client: Client, message: Message):
     # Check if we need more links
     if user_state["mf_index"] < len(user_state["files"]):
         next_file = user_state["files"][user_state["mf_index"]]
-        await message.reply_text(
-            f"✅ Link saved.\n\n"
-            f"Please send the MediaFire link for:\n"
-            f"👉 **{next_file['quality']}** ({next_file['file_size']})"
+        sc_quality = to_small_caps(next_file['quality'])
+        sc_size = to_small_caps(next_file['file_size'])
+        
+        text = (
+            f">✅ ʟɪɴᴋ sᴀᴠᴇᴅ.\n"
+            f">\n"
+            f">ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
+            f">👉 **{sc_quality}** ({sc_size})"
         )
+        await message.reply_text(text)
     else:
         # All links collected! Save to Database
         await save_movie_files(user_state["watch_order"], user_state["files"])
         
-        await message.reply_text(
-            f"🎉 **Upload Complete!**\n\n"
-            f"🎬 {user_state['title']}\n"
-            f"✅ {len(user_state['files'])} qualities saved to database.\n\n"
-            f"Use `/post` to publish this directly to your channel."
+        sc_title = to_small_caps(user_state['title'])
+        text = (
+            f">🎉 **ᴜᴘʟᴏᴀᴅ ᴄᴏᴍᴘʟᴇᴛᴇ!**\n"
+            f">\n"
+            f">🎬 {sc_title}\n"
+            f">✅ {len(user_state['files'])} ǫᴜᴀʟɪᴛɪᴇs sᴀᴠᴇᴅ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ.\n"
+            f">\n"
+            f">ᴜsᴇ `/post` ᴛᴏ ᴘᴜʙʟɪsʜ ᴛʜɪs ᴅɪʀᴇᴄᴛʟʏ ᴛᴏ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ."
         )
+        await message.reply_text(text)
+        
         # Clear state
         del UPLOAD_STATE[message.from_user.id]
 
@@ -138,4 +158,4 @@ async def handle_mediafire_links(client: Client, message: Message):
 async def cancel_upload(client: Client, query: CallbackQuery):
     if query.from_user.id == Config.ADMIN_ID and query.from_user.id in UPLOAD_STATE:
         del UPLOAD_STATE[query.from_user.id]
-        await query.message.edit_text("❌ Upload cancelled. Session cleared.")
+        await query.message.edit_text(">❌ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.")
