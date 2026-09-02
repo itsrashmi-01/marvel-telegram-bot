@@ -16,7 +16,12 @@ def get_readable_size(size_in_bytes: int) -> str:
 def extract_file_info(filename: str, file_size: int) -> dict:
     """Automatically extracts rich metadata from a release filename."""
     if not filename:
-        return {"Size_Bytes": file_size, "Size": get_readable_size(file_size)}
+        return {
+            "quality": "Unknown", 
+            "release": "Unknown", 
+            "audio": "Unknown", 
+            "size": get_readable_size(file_size)
+        }
         
     # Replace dots and underscores with spaces for significantly better Regex parsing
     name_lower = filename.lower().replace(".", " ").replace("_", " ")
@@ -64,7 +69,7 @@ def extract_file_info(filename: str, file_size: int) -> dict:
     elif re.search(r'\b(avc|x264|h264)\b', name_lower): codec_val = "AVC"
     elif re.search(r'\b(av1)\b', name_lower): codec_val = "AV1"
     
-    audio_val = None
+    audio_codec_val = None
     audio_match = re.search(r'(?<![a-z0-9])(aac5\.1|aac2\.0|aac|ddp5\.1|dd\+|dd|atmos|truehd|dts-hd|dts)(?![a-z0-9])', name_lower)
     if audio_match:
         audio_map = {
@@ -73,7 +78,7 @@ def extract_file_info(filename: str, file_size: int) -> dict:
             "atmos": "Dolby Atmos", "truehd": "TrueHD",
             "dts": "DTS", "dts-hd": "DTS-HD"
         }
-        audio_val = audio_map.get(audio_match.group(1), audio_match.group(1).upper())
+        audio_codec_val = audio_map.get(audio_match.group(1), audio_match.group(1).upper())
 
     bit_depth_val = "10-bit" if re.search(r'\b(10-?bit)\b', name_lower) else "8-bit"
 
@@ -88,16 +93,23 @@ def extract_file_info(filename: str, file_size: int) -> dict:
     if ext_match and len(ext_match) <= 4: 
         ext_val = ext_match.upper()
 
-    # --- 2. BUILD ORDERED DICTIONARY ---
+    # --- 2. BUILD DICTIONARY ---
     info = { "Size_Bytes": file_size } 
+    
+    # Keeping your advanced extractions available
     if langs: info["Languages"] = " + ".join(langs)
     if res_val: info["Resolution"] = res_val
     if source_val: info["Source"] = source_val
     if codec_val: info["Codec"] = codec_val
     if bit_depth_val: info["Bit Depth"] = bit_depth_val
-    if audio_val: info["Audio"] = audio_val
+    if audio_codec_val: info["Audio_Codec"] = audio_codec_val
     if sub_val: info["Subtitles"] = sub_val
     if ext_val: info["Extension"] = ext_val
-    info["Size"] = get_readable_size(file_size)
+
+    # CRITICAL: These 4 specific keys are required by upload.py to build the database correctly
+    info["quality"] = res_val if res_val else "480p"
+    info["release"] = source_val if source_val else "HD"
+    info["audio"] = " + ".join(langs) if langs else "English"
+    info["size"] = get_readable_size(file_size)
 
     return info
