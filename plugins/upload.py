@@ -2,7 +2,7 @@ from hydrogram import Client, filters
 from hydrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from config import Config
 from plugins.start import UPLOAD_STATE
-from database import save_movie_files, movies_col
+from database import save_movie_files
 from extractor import extract_file_info
 from template import to_small_caps
 
@@ -16,44 +16,33 @@ async def handle_media(client: Client, message: Message):
         await message.reply_text("<blockquote>⚠️ ᴘʟᴇᴀsᴇ sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ ᴛʜᴇ /start ᴍᴇɴᴜ ғɪʀsᴛ.</blockquote>")
         return
 
-    # Initialize the file array and status if this is the first file
     if "files" not in user_state:
         user_state["files"] = []
         user_state["status"] = "receiving"
-        user_state["detected_langs"] = set()
 
     if user_state["status"] != "receiving":
         await message.reply_text("<blockquote>⚠️ ᴄᴜʀʀᴇɴᴛʟʏ ᴡᴀɪᴛɪɴɢ ғᴏʀ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs. ᴘʟᴇᴀsᴇ ғɪɴɪsʜ ᴛʜᴇ ᴄᴜʀʀᴇɴᴛ sᴛᴇᴘ.</blockquote>")
         return
 
-    # 1. Extract File Metadata
+    # 1. Delegate ALL extraction to extractor.py
     doc = message.document or message.video
     file_name = getattr(doc, "file_name", "")
     file_size = getattr(doc, "file_size", 0)
     
     info = extract_file_info(file_name, file_size)
-    quality = info.get("Resolution", "Unknown")
-
-    # Basic language extraction logic from filename
-    fn_low = file_name.lower()
-    if "multi" in fn_low or ("hin" in fn_low and "eng" in fn_low):
-        lang = "English + Hindi"
-    elif "hin" in fn_low or "hindi" in fn_low:
-        lang = "Hindi"
-    else:
-        lang = "English"
-    user_state["detected_langs"].add(lang)
 
     # 2. Forward to Dump Channel to get secure file_id
     dump_msg = await message.forward(Config.DUMP_CHANNEL_ID)
     secure_file_id = dump_msg.document.file_id if dump_msg.document else dump_msg.video.file_id
 
-    # 3. Store in temporary session
+    # 3. Store in the new nested schema structure
     user_state["files"].append({
-        "quality": quality,
-        "file_size": info["Size"],
+        "quality": info["quality"],
         "file_id": secure_file_id,
-        "mediafire_link": None
+        "mediafire_link": None,
+        "file_size": info["size"],
+        "release": info["release"],
+        "audio": info["audio"]
     })
 
     # 4. Generate Summary Text
@@ -75,7 +64,6 @@ async def handle_media(client: Client, message: Message):
     ]
     markup = InlineKeyboardMarkup(buttons)
 
-    # 5. Edit the existing status message or send a new one
     if "status_msg_id" in user_state:
         await client.edit_message_text(
             chat_id=message.chat.id,
@@ -98,27 +86,18 @@ async def start_mediafire_collection(client: Client, query: CallbackQuery):
         await query.answer(to_small_caps("ɴᴏ ғɪʟᴇs ғᴏᴜɴᴅ."), show_alert=True)
         return
 
-    # Dynamically update the language in the database based on extraction
-    if "detected_langs" in user_state and user_state["detected_langs"]:
-        langs = list(user_state["detected_langs"])
-        final_lang = "English + Hindi" if "English + Hindi" in langs else langs[0]
-        await movies_col.update_one(
-            {"watch_order": user_state["watch_order"]},
-            {"$set": {"language": final_lang}}
-        )
-
-    # Transition state to asking for links
     user_state["status"] = "waiting_for_mediafire"
     user_state["mf_index"] = 0
     
     first_file = user_state["files"][0]
     sc_quality = to_small_caps(first_file['quality'])
     sc_size = to_small_caps(first_file['file_size'])
+    sc_release = to_small_caps(first_file['release'])
     
     text = (
         f"<blockquote>🔗 <b>ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs ʀᴇǫᴜɪʀᴇᴅ</b>\n\n"
         f"ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
-        f"👉 <b>{sc_quality}</b> ({sc_size})</blockquote>"
+        f"👉 <b>{sc_quality} {sc_release}</b> ({sc_size})</blockquote>"
     )
     await query.message.edit_text(text)
 
@@ -134,21 +113,19 @@ async def handle_mediafire_links(client: Client, message: Message):
         return
 
     idx = user_state["mf_index"]
-    
-    # Save the link
     user_state["files"][idx]["mediafire_link"] = message.text
     user_state["mf_index"] += 1
 
-    # Check if we need more links
     if user_state["mf_index"] < len(user_state["files"]):
         next_file = user_state["files"][user_state["mf_index"]]
         sc_quality = to_small_caps(next_file['quality'])
         sc_size = to_small_caps(next_file['file_size'])
+        sc_release = to_small_caps(next_file['release'])
         
         text = (
             f"<blockquote>✅ ʟɪɴᴋ sᴀᴠᴇᴅ.\n\n"
             f"ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
-            f"👉 <b>{sc_quality}</b> ({sc_size})</blockquote>"
+            f"👉 <b>{sc_quality} {sc_release}</b> ({sc_size})</blockquote>"
         )
         await message.reply_text(text)
     else:
@@ -163,13 +140,11 @@ async def handle_mediafire_links(client: Client, message: Message):
             f"👇 ᴄʟɪᴄᴋ ʙᴇʟᴏᴡ ᴛᴏ ᴘᴜʙʟɪsʜ ᴅɪʀᴇᴄᴛʟʏ ᴛᴏ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ.</blockquote>"
         )
         
-        # --- DIRECT PUBLISH BUTTON ADDED HERE ---
         buttons = [
             [InlineKeyboardButton(to_small_caps("📢 ᴘᴜʙʟɪsʜ ᴛᴏ ᴄʜᴀɴɴᴇʟ"), callback_data=f"confirm_post_{user_state['watch_order']}")]
         ]
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
         
-        # Clear state
         del UPLOAD_STATE[message.from_user.id]
 
 @Client.on_callback_query(filters.regex("^cancel_upload$"))
