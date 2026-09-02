@@ -37,9 +37,9 @@ def get_ordinal_suffix(n: int) -> str:
 POST_TEMPLATE = """\
 <blockquote>📁 <b>sᴀɢᴀ:</b> {saga}
 
-▶️ <b>ᴡᴀᴛᴄʜ ᴏʀᴅᴇʀ:</b> {watch_order}
+▶️ <b>ᴡᴀᴛᴄʜ ᴏʀᴅᴇʀ:</b> {watch_order}</blockquote>
 
-🎬 <b>ᴛɪᴛʟᴇ:</b> {title}
+<blockquote>🎬 <b>ᴛɪᴛʟᴇ:</b> {title}
 
 🗓️ <b>ʏᴇᴀʀ:</b> {year}
 
@@ -109,7 +109,7 @@ def format_movie_post(movie: dict, custom_qualities: str = None, custom_file_siz
 
 def get_download_button(deep_link_url: str) -> InlineKeyboardMarkup:
     """Returns the styled single download button."""
-    btn_text = to_small_caps("📩 Download Movie (All Qualities)")
+    btn_text = to_small_caps("📩 ᴅᴏᴡɴʟᴏᴀᴅ ᴍᴏᴠɪᴇ (ᴀʟʟ ǫᴜᴀʟɪᴛɪᴇs)")
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(btn_text, url=deep_link_url)]
     ])
