@@ -85,7 +85,7 @@ async def post_saga_pagination(client: Client, query: CallbackQuery):
     sc_saga_name = to_small_caps(full_saga_name)
     text = (
         f"<blockquote>📢 <b>ᴘᴜʙʟɪsʜɪɴɢ ғʀᴏᴍ: {sc_saga_name}</b>\n\n"
-        f"sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ:</blockquote>"
+        f"sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ɢᴇɴᴇʀᴀᴛ ᴀ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ:</blockquote>"
     )
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
