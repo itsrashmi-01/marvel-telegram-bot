@@ -1,5 +1,6 @@
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from hydrogram.errors import MessageNotModified
 from config import Config
 from plugins.list import RAW_MARVEL_LIST
 from database import movies_col, get_target_channel, set_target_channel, get_movie_by_order, init_marvel_list
@@ -63,7 +64,10 @@ async def return_main_menu(client: Client, query: CallbackQuery):
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            pass
 
 
 # ==========================================
@@ -77,7 +81,10 @@ async def settings_menu_handler(client: Client, query: CallbackQuery):
         "<blockquote>⚙️ <b>sᴇᴛᴛɪɴɢs</b>\n\n"
         "ғᴜᴛᴜʀᴇ ᴄᴏɴғɪɢᴜʀᴀᴛɪᴏɴs ᴀɴᴅ ᴏᴘᴛɪᴏɴs ᴡɪʟʟ ᴀᴘᴘᴇᴀʀ ʜᴇʀᴇ.</blockquote>"
     )
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    except MessageNotModified:
+        pass
 
 
 # ==========================================
@@ -96,7 +103,10 @@ async def upload_menu_selection(client: Client, query: CallbackQuery):
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            pass
 
 @Client.on_callback_query(filters.regex(r"^saga_(.+)_(\d+)$"))
 async def saga_pagination(client: Client, query: CallbackQuery):
@@ -139,7 +149,10 @@ async def saga_pagination(client: Client, query: CallbackQuery):
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            pass
 
 @Client.on_callback_query(filters.regex(r"^init_upload_(\d+)$"))
 async def init_upload(client: Client, query: CallbackQuery):
@@ -200,7 +213,10 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
         f"ᴛʜᴇ ʙᴏᴛ ᴡɪʟʟ ᴘᴜʙʟɪsʜ ᴀʟʟ ᴍᴏᴠɪᴇ ᴘᴏsᴛs ᴛᴏ ᴛʜɪs ᴄʜᴀɴɴᴇʟ.\n"
         f"ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇ ʙᴏᴛ ɪs ᴀᴅᴅᴇᴅ ᴀs ᴀɴ <b>ᴀᴅᴍɪɴ</b> ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ!</blockquote>"
     )
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    except MessageNotModified:
+        pass
 
 @Client.on_callback_query(filters.regex("^delete_channel$"))
 async def delete_channel(client: Client, query: CallbackQuery):
@@ -220,7 +236,10 @@ async def ask_for_channel(client: Client, query: CallbackQuery):
         "𝟸. ғᴏʀᴡᴀʀᴅ ᴀɴʏ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ᴛʜᴀᴛ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴍᴇ ʀɪɢʜᴛ ɴᴏᴡ.\n"
         "(ᴏʀ, ʏᴏᴜ ᴄᴀɴ ᴊᴜsᴛ ᴛʏᴘᴇ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ɪᴅ ɪғ ʏᴏᴜ ᴋɴᴏᴡ ɪᴛ, ᴇ.ɢ., -𝟷𝟶𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿)</blockquote>"
     )
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    except MessageNotModified:
+        pass
 
 @Client.on_message(filters.private & filters.user(Config.ADMIN_ID))
 async def capture_channel_input(client: Client, message: Message):
