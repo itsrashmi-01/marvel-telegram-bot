@@ -21,38 +21,35 @@ async def start_webserver():
     print(f"Web server started on port {Config.PORT}")
 
 # ==========================================
-# 1. ADMIN BOT
-# ==========================================
-admin_bot = Client(
-    "admin_bot",
-    api_id=Config.API_ID,
-    api_hash=Config.API_HASH,
-    bot_token=Config.BOT_TOKEN,
-    plugins=dict(root="plugins") 
-)
-
-# ==========================================
-# 2. FILE STORE BOT
-# ==========================================
-file_bot = Client(
-    "file_bot",
-    api_id=Config.API_ID,
-    api_hash=Config.API_HASH,
-    bot_token=Config.FILE_STORE_BOT_TOKEN,
-    plugins=dict(root="file_sender") 
-)
-
-# ==========================================
-# 3. RUN BOTS & WEB SERVER SIMULTANEOUSLY
+# MAIN EXECUTION WRAPPER
 # ==========================================
 async def main():
     print("Starting Multi-Bot Architecture & Web Server...")
     
-    # 1. Start the dummy web server so Render detects an open port
+    # 1. Start the dummy web server so Render detects an open port instantly
     await start_webserver()
     
-    # 2. Start both Telegram bots
+    # 2. ADMIN BOT (Safely initialized inside the running event loop)
+    admin_bot = Client(
+        "admin_bot",
+        api_id=Config.API_ID,
+        api_hash=Config.API_HASH,
+        bot_token=Config.BOT_TOKEN,
+        plugins=dict(root="plugins") 
+    )
+
+    # 3. FILE STORE BOT (Safely initialized inside the running event loop)
+    file_bot = Client(
+        "file_bot",
+        api_id=Config.API_ID,
+        api_hash=Config.API_HASH,
+        bot_token=Config.FILE_STORE_BOT_TOKEN,
+        plugins=dict(root="file_sender") 
+    )
+
+    # 4. RUN BOTH BOTS SIMULTANEOUSLY
     await compose([admin_bot, file_bot])
 
 if __name__ == "__main__":
+    # This creates the event loop FIRST, preventing the RuntimeError
     asyncio.run(main())
