@@ -26,7 +26,6 @@ export default {
 
     try {
       const body = await request.json();
-      // Added 'type' to the extracted variables
       const { id, t, hash, action, quality, type } = body;
 
       if (!id || !t || !hash || !action) {
@@ -92,10 +91,10 @@ export default {
       if (action === "meta") {
         const safeData = {
           title: movieData.title,
-          // Poster is completely removed. We now send quality and size directly.
           files: movieData.files ? movieData.files.map(f => ({
               quality: f.quality,
-              size: f.size || f.size_str || "Available" // Adjust based on your DB field
+              // dynamically targets the exact database field without throwing a placeholder
+              size: f.size || f.file_size || f.size_str || f.fileSize || "" 
           })) : []
         };
         return new Response(JSON.stringify(safeData), { 
@@ -114,12 +113,12 @@ export default {
             return new Response(JSON.stringify({ error: "Requested quality not found." }), { status: 404, headers: corsHeaders });
         }
         
-        // Route exactly to the right URL based on the button clicked
         let finalUrl = "";
         if (type === "telegram") {
-            finalUrl = file.telegram_link || file.url; // Adjust to your DB's telegram link field
+            // Adjust to your exact Telegram deeplink variable in MongoDB if it differs
+            finalUrl = file.telegram_link || file.telegram_url || file.url; 
         } else {
-            finalUrl = file.mediafire_link || file.url; // Adjust to your DB's direct link field
+            finalUrl = file.mediafire_link || file.url; 
         }
 
         return new Response(JSON.stringify({ url: finalUrl }), { 
