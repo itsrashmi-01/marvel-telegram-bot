@@ -1,78 +1,44 @@
-import asyncio
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import get_movie_by_order
 from template import to_small_caps
+from config import Config
 
 # ==========================================
-# BACKGROUND AUTO-DELETE TASK
-# ==========================================
-async def delete_after_delay(client: Client, chat_id: int, message_ids: list, delay_seconds: int):
-    """Waits for the specified time and then deletes the messages."""
-    await asyncio.sleep(delay_seconds)
-    for msg_id in message_ids:
-        try:
-            await client.delete_messages(chat_id=chat_id, message_ids=msg_id)
-        except Exception as e:
-            print(f"Failed to delete message {msg_id}: {e}")
-            pass
-
-# ==========================================
-# DEEP LINK HANDLER
+# DEEP LINK HANDLER (Redirect to Website)
 # ==========================================
 @Client.on_message(filters.regex(r"^/start get_(\d+)") & filters.private)
 async def handle_deep_link_download(client: Client, message: Message):
+    # 1. Extract the movie watch_order ID from the link
     order = int(message.matches[0].group(1))
+    
+    # 2. Verify the movie actually exists in the database
     movie = await get_movie_by_order(order)
     
     if not movie or not movie.get("files"):
         return await message.reply_text("<blockquote>❌ <b>sᴏʀʀʏ!</b>\n\nᴛʜɪs ᴍᴏᴠɪᴇ ɪs ᴇɪᴛʜᴇʀ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ᴏʀ ᴛʜᴇ ʟɪɴᴋ ɪs ʙʀᴏᴋᴇɴ.</blockquote>")
 
     sc_title = to_small_caps(movie['title'])
-    warning_text = (
-        f"<blockquote>⚠️ <b>ᴀᴛᴛᴇɴᴛɪᴏɴ!</b>\n\n"
-        f"ʏᴏᴜ ᴀʀᴇ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ: <b>{sc_title}</b>\n\n"
-        f"ᴛᴏ ᴘʀᴏᴛᴇᴄᴛ ᴀɢᴀɪɴsᴛ ᴄᴏᴘʏʀɪɢʜᴛ sᴛʀɪᴋᴇs, ᴛʜᴇsᴇ ғɪʟᴇs ᴀɴᴅ ʟɪɴᴋs ᴡɪʟʟ ʙᴇ <b>ᴅᴇʟᴇᴛᴇᴅ ɪɴ 𝟻 ᴍɪɴᴜᴛᴇs</b>.\n\n"
-        f"👉 ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴛʜᴇᴍ ᴛᴏ ʏᴏᴜʀ 'sᴀᴠᴇᴅ ᴍᴇssᴀɢᴇs' ᴏʀ ᴅᴏᴡɴʟᴏᴀᴅ ᴛʜᴇᴍ ɪᴍᴍᴇᴅɪᴀᴛᴇʟʏ!</blockquote>"
+    base_url = getattr(Config, "DOWNLOAD_PAGE_URL", "")
+    
+    if not base_url:
+        return await message.reply_text("<blockquote>⚠️ <b>ᴇʀʀᴏʀ:</b> ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ ᴜʀʟ ɪs ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ.</blockquote>")
+
+    # 3. Construct the Web URL (e.g., https://site.com/download?id=12)
+    download_link = f"{base_url}?id={order}"
+    
+    text = (
+        f"<blockquote>🎬 <b>{sc_title}</b>\n\n"
+        f"ʏᴏᴜʀ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ ɪs ʀᴇᴀᴅʏ! ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ғɪʟᴇs ᴀɴᴅ ʟɪɴᴋs.</blockquote>"
     )
-    warning_msg = await message.reply_text(warning_text)
-    messages_to_delete = [warning_msg.id, message.id]
-
-    for f in movie["files"]:
-        quality = to_small_caps(f.get("quality", "Unknown"))
-        size = to_small_caps(f.get("file_size", "Unknown"))
-        
-        buttons = []
-        if f.get("mediafire_link"):
-            buttons.append([InlineKeyboardButton(to_small_caps(f"🔗 ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ({quality})"), url=f["mediafire_link"])])
-        
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        
-        caption = (
-            f"<blockquote>🎬 <b>{sc_title}</b>\n\n"
-            f"📦 <b>ǫᴜᴀʟɪᴛʏ:</b> {quality}\n"
-            f"💾 <b>sɪᴢᴇ:</b> {size}</blockquote>"
-        )
-
-        try:
-            sent_msg = await client.send_cached_media(
-                chat_id=message.chat.id,
-                file_id=f["file_id"],
-                caption=caption,
-                reply_markup=markup
-            )
-            messages_to_delete.append(sent_msg.id)
-            await asyncio.sleep(1) # Prevent flood waits when sending multiple files
-        except Exception as e:
-            print(f"File error: {e}")
-
-    # Launch auto-delete countdown (300 seconds = 5 minutes)
-    if len(messages_to_delete) > 2:
-        asyncio.create_task(delete_after_delay(client, message.chat.id, messages_to_delete, 300))
+    
+    buttons = [[InlineKeyboardButton(to_small_caps("🌐 ᴏᴘᴇɴ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ"), url=download_link)]]
+    
+    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 # ==========================================
 # FALLBACK HANDLER
 # ==========================================
 @Client.on_message(filters.private & ~filters.regex(r"^/start get_(\d+)"))
 async def file_bot_fallback(client: Client, message: Message):
-    await message.reply_text("<blockquote>👋 ɪ ᴀᴍ ᴀ ғɪʟᴇ ᴘʀᴏᴠɪᴅᴇʀ ʙᴏᴛ.\n\nᴘʟᴇᴀsᴇ ᴜsᴇ ᴍʏ ʟɪɴᴋs ɪɴ ᴛʜᴇ ᴍᴀɪɴ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ ᴍᴏᴠɪᴇs.</blockquote>")
+    await message.reply_text("<blockquote>👋 ɪ ᴀᴍ ᴀ ғɪʟᴇ ᴘʀᴏᴠɪᴅᴇʀ ʙᴏᴛ.\n\nᴘʟᴇᴀsᴇ ᴜsᴇ ᴍʏ ʟɪɴᴋs ɪɴ ᴛʜᴇ ᴍᴀɪɴ ᴄʜᴀɴɴᴇʟ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇs.</blockquote>")
