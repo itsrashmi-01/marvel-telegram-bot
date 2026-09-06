@@ -1,3 +1,4 @@
+import json
 from aiohttp import web
 from database import get_movie_by_order
 from config import Config
@@ -8,9 +9,9 @@ async def handle_ping(request):
 async def fetch_movie(request):
     # 1. SECURITY: Block anyone trying to access Render directly without the CF Worker secret
     secret_header = request.headers.get("X-Worker-Secret")
-    expected_secret = getattr(Config, "SECRET_KEY", "generate_a_random_password_here")
+    expected_secret = getattr(Config, "SECRET_KEY", "")
     
-    if secret_header != expected_secret:
+    if not secret_header or secret_header != expected_secret:
         return web.json_response({"error": "Unauthorized Origin"}, status=403)
 
     try:
@@ -26,11 +27,11 @@ async def fetch_movie(request):
         if not movie:
             return web.json_response({"document": None})
 
-        # 3. Clean the response (MongoDB ObjectIds are not JSON serializable by default)
-        if "_id" in movie:
-            movie["_id"] = str(movie["_id"])
-
-        return web.json_response({"document": movie})
+        # 3. BULLETPROOF JSON SERIALIZATION
+        # Forces ObjectIds, datetimes, and other complex MongoDB types into strings
+        safe_json = json.dumps({"document": movie}, default=str)
+        
+        return web.Response(text=safe_json, content_type="application/json")
 
     except Exception as e:
         return web.json_response({"error": "Internal Server Error", "details": str(e)}, status=500)
