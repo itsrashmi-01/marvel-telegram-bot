@@ -2,16 +2,14 @@ import asyncio
 from aiohttp import web
 from hydrogram import Client, compose
 from config import Config
-
-# ==========================================
-# DUMMY WEB SERVER (Keeps Render/Koyeb happy)
-# ==========================================
-async def handle_ping(request):
-    return web.Response(text="Bot is running smoothly!")
+from server import setup_routes
 
 async def start_webserver():
     app = web.Application()
-    app.router.add_get('/', handle_ping)
+    
+    # Load the secure API routes
+    setup_routes(app)
+    
     runner = web.AppRunner(app)
     await runner.setup()
     
@@ -20,16 +18,13 @@ async def start_webserver():
     await site.start()
     print(f"Web server started on port {Config.PORT}")
 
-# ==========================================
-# MAIN EXECUTION WRAPPER
-# ==========================================
 async def main():
-    print("Starting Multi-Bot Architecture & Web Server...")
+    print("Starting Jarvis 2.0 Architecture...")
     
-    # 1. Start the dummy web server so Render detects an open port instantly
+    # 1. Start the Render API Server
     await start_webserver()
     
-    # 2. ADMIN BOT (Safely initialized inside the running event loop)
+    # 2. ADMIN BOT
     admin_bot = Client(
         "admin_bot",
         api_id=Config.API_ID,
@@ -38,7 +33,7 @@ async def main():
         plugins=dict(root="plugins") 
     )
 
-    # 3. FILE STORE BOT (Safely initialized inside the running event loop)
+    # 3. FILE STORE BOT
     file_bot = Client(
         "file_bot",
         api_id=Config.API_ID,
@@ -51,5 +46,4 @@ async def main():
     await compose([admin_bot, file_bot])
 
 if __name__ == "__main__":
-    # This creates the event loop FIRST, preventing the RuntimeError
     asyncio.run(main())
