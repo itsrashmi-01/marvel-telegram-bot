@@ -36,7 +36,6 @@ async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
                 release_year = release_date[:4] if release_date else "N/A"
 
                 return {
-                    "overview": top.get("overview", "No synopsis available."),
                     "release_year": release_year,
                     "genres": genres if genres else ["Action", "Sci-Fi", "Adventure"],
                     "images": {
@@ -65,7 +64,6 @@ async def init_marvel_list(marvel_data: list, bot_username: str = ""):
                     "audio": "Pending...",
                     "release_year": tmdb_data.get("release_year", "N/A"),
                     "genres": tmdb_data.get("genres", ["Action", "Sci-Fi", "Adventure"]),
-                    "overview": tmdb_data.get("overview", "Overview coming soon."),
                     "images": tmdb_data.get("images", {"poster_url": "", "backdrop_url": ""}),
                     "links": {
                         "telegram_deep_link": f"https://t.me/{bot_username}?start=get_{item['order']}" if bot_username else ""
