@@ -1,3 +1,5 @@
+import time
+import hashlib
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import get_movie_by_order
@@ -20,16 +22,26 @@ async def handle_deep_link_download(client: Client, message: Message):
 
     sc_title = to_small_caps(movie['title'])
     base_url = getattr(Config, "DOWNLOAD_PAGE_URL", "")
+    secret_key = getattr(Config, "SECRET_KEY", "")
     
     if not base_url:
         return await message.reply_text("<blockquote>⚠️ <b>ᴇʀʀᴏʀ:</b> ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ ᴜʀʟ ɪs ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ.</blockquote>")
+        
+    if not secret_key or secret_key == "generate_a_random_password_here":
+        return await message.reply_text("<blockquote>⚠️ <b>ᴇʀʀᴏʀ:</b> sᴇᴄʀᴇᴛ_ᴋᴇʏ ɪs ɴᴏᴛ ᴄᴏɴғɪɢᴜʀᴇᴅ ɪɴ ʏᴏᴜʀ ᴇɴᴠɪʀᴏɴᴍᴇɴᴛ.</blockquote>")
 
-    # 3. Construct the Web URL (e.g., https://site.com/download?id=12)
-    download_link = f"{base_url}?id={order}"
+    # 3. Generate Cryptographic Secure Link (Valid for 1 Hour)
+    expires = int(time.time()) + 3600 
+    hash_data = f"{order}{expires}{secret_key}".encode()
+    secure_hash = hashlib.sha256(hash_data).hexdigest()
+
+    # 4. Construct the Secure Web URL
+    download_link = f"{base_url}?id={order}&t={expires}&hash={secure_hash}"
     
     text = (
         f"<blockquote>🎬 <b>{sc_title}</b>\n\n"
-        f"ʏᴏᴜʀ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ ɪs ʀᴇᴀᴅʏ! ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ғɪʟᴇs ᴀɴᴅ ʟɪɴᴋs.</blockquote>"
+        f"ʏᴏᴜʀ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ ɪs ʀᴇᴀᴅʏ! ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ғɪʟᴇs ᴀɴᴅ ʟɪɴᴋs.\n\n"
+        f"⏳ <i>ᴛʜɪs ʟɪɴᴋ ɪs sᴇᴄᴜʀᴇ ᴀɴᴅ ᴡɪʟʟ ᴇxᴘɪʀᴇ ɪɴ 𝟷 ʜᴏᴜʀ.</i></blockquote>"
     )
     
     buttons = [[InlineKeyboardButton(to_small_caps("🌐 ᴏᴘᴇɴ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴀɢᴇ"), url=download_link)]]
