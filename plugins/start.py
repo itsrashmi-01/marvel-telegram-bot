@@ -114,7 +114,7 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     if page > 1: nav.append(InlineKeyboardButton(to_small_caps("⬅️ ᴘʀᴇᴠ"), callback_data=f"saga_{code}_{page-1}"))
     if page < total_pages: nav.append(InlineKeyboardButton(to_small_caps("ɴᴇxᴛ ➡️"), callback_data=f"saga_{code}_{page+1}"))
     if nav: buttons.append(nav)
-    buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs"), callback_data="upload_menu")])
+    buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢs"), callback_data="upload_menu")])
 
     sc_saga_name = to_small_caps(full_saga_name)
     text = (
@@ -138,8 +138,11 @@ async def init_upload(client: Client, query: CallbackQuery):
         movie = await get_movie_by_order(order)
         if not movie:
             await query.answer(to_small_caps("ғᴇᴛᴄʜɪɴɢ ᴛᴍᴅʙ ᴍᴇᴛᴀᴅᴀᴛᴀ... ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ."), show_alert=False)
-            bot_info = await client.get_me()
-            await init_marvel_list([raw_movie], bot_username=bot_info.username)
+            # Removed the broken 'bot_username' requirement
+            await init_marvel_list([raw_movie])
+        else:
+            # Tell Telegram the click was successful so the button stops spinning
+            await query.answer()
             
         UPLOAD_STATE[query.from_user.id] = {"watch_order": order, "title": raw_movie["title"]}
         sc_title = to_small_caps(raw_movie["title"])
