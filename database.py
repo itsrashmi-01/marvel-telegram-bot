@@ -47,7 +47,8 @@ async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
         print(f"TMDB Fetch Error for {title}: {e}")
     return {}
 
-async def init_marvel_list(marvel_data: list, bot_username: str = ""):
+# Removed bot_username parameter since we no longer hardcode links here
+async def init_marvel_list(marvel_data: list):
     inserted = 0
     async with aiohttp.ClientSession() as session:
         for item in marvel_data:
@@ -65,11 +66,8 @@ async def init_marvel_list(marvel_data: list, bot_username: str = ""):
                     "release_year": tmdb_data.get("release_year", "N/A"),
                     "genres": tmdb_data.get("genres", ["Action", "Sci-Fi", "Adventure"]),
                     "images": tmdb_data.get("images", {"poster_url": "", "backdrop_url": ""}),
-                    "links": {
-                        "telegram_deep_link": f"https://t.me/{bot_username}?start=get_{item['order']}" if bot_username else ""
-                    },
                     "status": "Pending",
-                    "files": []
+                    "files": [] # file_id and sizes will live exclusively in here
                 }
                 await movies_col.insert_one(doc)
                 inserted += 1
@@ -100,7 +98,7 @@ async def get_all_movies():
     cursor = movies_col.find().sort("watch_order", 1)
     return await cursor.to_list(length=200)
 
-# --- NEW MULTI-CHANNEL DATABASE FUNCTIONS ---
+# --- MULTI-CHANNEL DATABASE FUNCTIONS ---
 async def get_target_channels():
     doc = await settings_col.find_one({"_id": "bot_settings"})
     return doc.get("channels", []) if doc else []
