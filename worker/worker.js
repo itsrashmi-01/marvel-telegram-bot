@@ -93,7 +93,7 @@ export default {
           title: movieData.title,
           files: movieData.files ? movieData.files.map(f => ({
               quality: f.quality,
-              // dynamically targets the exact database field without throwing a placeholder
+              // dynamically targets the exact database field
               size: f.size || f.file_size || f.size_str || f.fileSize || "" 
           })) : []
         };
@@ -114,11 +114,16 @@ export default {
         }
         
         let finalUrl = "";
+        
+        // Routes to the dynamically injected telegram_link from server.py, or falls back to mediafire
         if (type === "telegram") {
-            // Adjust to your exact Telegram deeplink variable in MongoDB if it differs
-            finalUrl = file.telegram_link || file.telegram_url || file.url; 
+            finalUrl = file.telegram_link || file.url; 
         } else {
             finalUrl = file.mediafire_link || file.url; 
+        }
+
+        if (!finalUrl) {
+            return new Response(JSON.stringify({ error: "Download link is missing." }), { status: 404, headers: corsHeaders });
         }
 
         return new Response(JSON.stringify({ url: finalUrl }), { 
