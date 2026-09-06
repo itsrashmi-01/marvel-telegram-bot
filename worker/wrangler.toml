@@ -1,0 +1,8 @@
+name = "jarvis-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# We will add these secrets directly in the Cloudflare Dashboard later
+# [vars]
+# MONGO_API_KEY = "your_atlas_data_api_key"
+# MONGO_ENDPOINT = "https://data.mongodb-api.com/app/data-xxxx/endpoint/data/v1"
