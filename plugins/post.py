@@ -2,87 +2,99 @@ import asyncio
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import Config
-from database import movies_col, get_movie_by_order, get_target_channel
+from database import movies_col, get_movie_by_order, get_target_channels
 from plugins.start import SAGA_CATEGORIES
 from template import format_movie_post, get_download_button, to_small_caps
 
 @Client.on_message(filters.command("post") & filters.private)
 async def post_command_handler(client: Client, message: Message):
     if message.from_user.id != Config.ADMIN_ID: return
-    target_channel = await get_target_channel()
-    if not target_channel:
-        text = (
-            "<blockquote>⚠️ <b>ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ!</b>\n"
-            "ᴜsᴇ ᴛʜᴇ '📢 ᴍʏ ᴄʜᴀɴɴᴇʟ' ʙᴜᴛᴛᴏɴ ɪɴ ᴛʜᴇ /start ᴍᴇɴᴜ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ.</blockquote>"
-        )
-        return await message.reply_text(text)
-
     buttons = []
     for code, full_name in SAGA_CATEGORIES.items():
-        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}_1")])
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}")])
         
-    text = (
-        "<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:</b>\n"
-        "(ᴏɴʟʏ ᴍᴏᴠɪᴇs ᴡɪᴛʜ ᴜᴘʟᴏᴀᴅᴇᴅ ғɪʟᴇs ᴡɪʟʟ ʙᴇ sʜᴏᴡɴ ʜᴇʀᴇ)</blockquote>"
-    )
+    text = "<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴍᴏᴠɪᴇs ғʀᴏᴍ:</b></blockquote>"
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-@Client.on_callback_query(filters.regex(r"^post_saga_(.+)_(\d+)$"))
-async def post_saga_pagination(client: Client, query: CallbackQuery):
+@Client.on_callback_query(filters.regex("^post_menu_back$"))
+async def post_menu_back(client: Client, query: CallbackQuery):
+    """Entry point from Main Menu"""
+    buttons = []
+    for code, full_name in SAGA_CATEGORIES.items():
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}")])
+    buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")])
+        
+    text = "<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴍᴏᴠɪᴇs ғʀᴏᴍ:</b></blockquote>"
+    if query.message.photo:
+        await query.message.delete()
+        await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@Client.on_callback_query(filters.regex(r"^post_saga_(.+)$"))
+async def post_select_channel(client: Client, query: CallbackQuery):
+    """Step 2: Select the target channel to post the saga to."""
     if query.from_user.id != Config.ADMIN_ID: return
     code = query.data.split("_")[2]
-    page = int(query.data.split("_")[3])
     full_saga_name = SAGA_CATEGORIES.get(code)
     
-    if not full_saga_name:
-        return await query.answer("ɪɴᴠᴀʟɪᴅ sᴀɢᴀ", show_alert=True)
-
-    available_movies = await movies_col.find(
-        {"saga": full_saga_name, "status": "Available"}
-    ).sort("saga_rank", 1).to_list(length=100)
-
-    if not available_movies:
+    # Check if movies exist in this saga
+    count = await movies_col.count_documents({"saga": full_saga_name, "status": "Available"})
+    if count == 0:
         return await query.answer("ɴᴏ ᴍᴏᴠɪᴇs ᴜᴘʟᴏᴀᴅᴇᴅ ɪɴ ᴛʜɪs sᴀɢᴀ ʏᴇᴛ!", show_alert=True)
 
-    items_per_page = 10
-    total_pages = (len(available_movies) + items_per_page - 1) // items_per_page
-    start_idx = (page - 1) * items_per_page
-    
-    buttons = []
-    # --- BULK POST ALL BUTTON ---
-    buttons.append([InlineKeyboardButton(to_small_caps(f"🚀 ᴘᴏsᴛ ᴀʟʟ {full_saga_name} ᴍᴏᴠɪᴇs"), callback_data=f"post_bulk_{code}")])
-    
-    for item in available_movies[start_idx : start_idx + items_per_page]:
-        btn_text = to_small_caps(f"📢 {item['title']} ({item.get('release_year', '')})")
-        buttons.append([InlineKeyboardButton(btn_text, callback_data=f"confirm_post_{item['watch_order']}")])
-        
-    nav = []
-    if page > 1: nav.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"post_saga_{code}_{page-1}"))
-    if page < total_pages: nav.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"post_saga_{code}_{page+1}"))
-    if nav: buttons.append(nav)
-    buttons.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs", callback_data="post_menu_back")])
+    channels = await get_target_channels()
+    if not channels:
+        return await query.answer("ɴᴏ ᴄʜᴀɴɴᴇʟs ᴀᴅᴅᴇᴅ! ɢᴏ ᴛᴏ 'ᴍʏ ᴄʜᴀɴɴᴇʟs' ᴛᴏ ᴀᴅᴅ ᴏɴᴇ.", show_alert=True)
 
-    sc_saga_name = to_small_caps(full_saga_name)
+    buttons = []
+    for ch in channels:
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {ch['name']}"), callback_data=f"post_chan_{code}_{ch['id']}")])
+    buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢᴀs"), callback_data="post_menu_back")])
+
+    sc_saga = to_small_caps(full_saga_name)
     text = (
-        f"<blockquote>📢 <b>ᴘᴜʙʟɪsʜɪɴɢ ғʀᴏᴍ: {sc_saga_name}</b>\n\n"
-        f"sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ:</blockquote>"
+        f"<blockquote>📢 <b>{sc_saga} ({count} ᴍᴏᴠɪᴇs)</b>\n\n"
+        f"sᴇʟᴇᴄᴛ ᴛʜᴇ ᴅᴇsᴛɪɴᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ:</blockquote>"
     )
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-@Client.on_callback_query(filters.regex(r"^post_bulk_(.+)$"))
-async def bulk_publish_saga(client: Client, query: CallbackQuery):
-    """Posts all available movies in a saga to the channel."""
+@Client.on_callback_query(filters.regex(r"^post_chan_(.+)_(.+)$"))
+async def post_confirm_upload(client: Client, query: CallbackQuery):
+    """Step 3: Confirm Upload"""
     if query.from_user.id != Config.ADMIN_ID: return
     code = query.data.split("_")[2]
+    channel_id = query.data.split("_")[3]
     full_saga_name = SAGA_CATEGORIES.get(code)
-    target_channel = await get_target_channel()
+    
+    count = await movies_col.count_documents({"saga": full_saga_name, "status": "Available"})
+    sc_saga = to_small_caps(full_saga_name)
+    
+    buttons = [
+        [InlineKeyboardButton(to_small_caps("🚀 ᴜᴘʟᴏᴀᴅ (ᴘᴜʙʟɪsʜ ᴀʟʟ)"), callback_data=f"post_exec_{code}_{channel_id}")],
+        [InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ"), callback_data=f"post_saga_{code}")]
+    ]
+    
+    text = (
+        f"<blockquote>⚠️ <b>ʀᴇᴀᴅʏ ᴛᴏ ᴜᴘʟᴏᴀᴅ</b>\n\n"
+        f"ʏᴏᴜ ᴀʀᴇ ᴀʙᴏᴜᴛ ᴛᴏ ᴘᴜʙʟɪsʜ <b>{count} ᴍᴏᴠɪᴇs</b> ғʀᴏᴍ <b>{sc_saga}</b>.\n\n"
+        f"ᴄʟɪᴄᴋ ᴜᴘʟᴏᴀᴅ ᴛᴏ ʙᴇɢɪɴ ᴛʜᴇ ᴘʀᴏᴄᴇss.</blockquote>"
+    )
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@Client.on_callback_query(filters.regex(r"^post_exec_(.+)_(.+)$"))
+async def execute_bulk_post(client: Client, query: CallbackQuery):
+    """Step 4: Execute the Loop"""
+    if query.from_user.id != Config.ADMIN_ID: return
+    code = query.data.split("_")[2]
+    channel_id = int(query.data.split("_")[3])
+    full_saga_name = SAGA_CATEGORIES.get(code)
     
     available_movies = await movies_col.find(
         {"saga": full_saga_name, "status": "Available"}
     ).sort("saga_rank", 1).to_list(length=100)
 
-    sc_saga = to_small_caps(full_saga_name)
-    await query.message.edit_text(f"<blockquote>🚀 <b>ᴘᴏsᴛɪɴɢ {len(available_movies)} ᴍᴏᴠɪᴇs ғʀᴏᴍ {sc_saga}...</b> ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ.</blockquote>")
+    await query.message.edit_text("<blockquote>🚀 <b>ᴜᴘʟᴏᴀᴅɪɴɢ ᴍᴏᴠɪᴇs...</b> ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ.</blockquote>")
     
     for movie in available_movies:
         caption = format_movie_post(movie)
@@ -93,28 +105,39 @@ async def bulk_publish_saga(client: Client, query: CallbackQuery):
         
         try:
             if poster_url:
-                await client.send_photo(target_channel, photo=poster_url, caption=caption, reply_markup=markup)
+                await client.send_photo(channel_id, photo=poster_url, caption=caption, reply_markup=markup)
             else:
-                await client.send_message(target_channel, text=caption, reply_markup=markup)
+                await client.send_message(channel_id, text=caption, reply_markup=markup)
             await asyncio.sleep(2.5) # Prevent flood waits
-        except Exception as e:
-            pass # Skips over errors quietly to continue the loop
+        except Exception:
+            pass 
             
-    await query.message.reply_text("<blockquote>✅ <b>ᴀʟʟ ᴍᴏᴠɪᴇs ᴘᴜʙʟɪsʜᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b></blockquote>")
+    await query.message.reply_text("<blockquote>✅ <b>ᴀʟʟ ᴍᴏᴠɪᴇs ᴜᴘʟᴏᴀᴅᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b></blockquote>")
 
-@Client.on_callback_query(filters.regex(r"^confirm_post_(\d+)$"))
+# --- FOR SINGLE UPLOADS TRIGGERED AFTER ADDING MEDIAFIRE LINKS ---
+@Client.on_callback_query(filters.regex(r"^select_chan_post_(\d+)$"))
+async def select_channel_single(client: Client, query: CallbackQuery):
+    """Called from upload.py to select a channel for a single movie"""
+    order = int(query.data.split("_")[3])
+    channels = await get_target_channels()
+    if not channels:
+        return await query.answer("ɴᴏ ᴄʜᴀɴɴᴇʟs ᴀᴅᴅᴇᴅ!", show_alert=True)
+        
+    buttons = []
+    for ch in channels:
+        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {ch['name']}"), callback_data=f"single_post_{order}_{ch['id']}")])
+        
+    await query.message.edit_text("<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴅᴇsᴛɪɴᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ:</b></blockquote>", reply_markup=InlineKeyboardMarkup(buttons))
+
+@Client.on_callback_query(filters.regex(r"^single_post_(\d+)_(-?\d+)$"))
 async def publish_single_post(client: Client, query: CallbackQuery):
     if query.from_user.id != Config.ADMIN_ID: return
     order = int(query.data.split("_")[2])
-    movie = await get_movie_by_order(order)
-    target_channel = await get_target_channel()
+    channel_id = int(query.data.split("_")[3])
     
-    if not target_channel:
-        return await query.answer("ɴᴏ ᴄʜᴀɴɴᴇʟ ʟɪɴᴋᴇᴅ! ʟɪɴᴋ ɪᴛ ɪɴ /start.", show_alert=True)
-    if not movie or not movie.get("files"):
-        return await query.answer("ᴍᴏᴠɪᴇ ᴏʀ ғɪʟᴇs ɴᴏᴛ ғᴏᴜɴᴅ!", show_alert=True)
-
-    await query.answer("ᴘᴜʙʟɪsʜɪɴɢ ᴛᴏ ᴄʜᴀɴɴᴇʟ...")
+    movie = await get_movie_by_order(order)
+    await query.answer("ᴘᴜʙʟɪsʜɪɴɢ...")
+    
     caption = format_movie_post(movie)
     bot_info = await client.get_me()
     deep_link = f"https://t.me/{bot_info.username}?start=get_{order}"
@@ -123,20 +146,12 @@ async def publish_single_post(client: Client, query: CallbackQuery):
 
     try:
         if poster_url:
-            await client.send_photo(target_channel, photo=poster_url, caption=caption, reply_markup=markup)
+            await client.send_photo(channel_id, photo=poster_url, caption=caption, reply_markup=markup)
         else:
-            await client.send_message(target_channel, text=caption, reply_markup=markup)
+            await client.send_message(channel_id, text=caption, reply_markup=markup)
             
         sc_title = to_small_caps(movie['title'])
         await query.message.edit_text(f"<blockquote>✅ <b>sᴜᴄᴄᴇssғᴜʟʟʏ ᴘᴜʙʟɪsʜᴇᴅ ᴛᴏ ᴄʜᴀɴɴᴇʟ!</b>\n\n🎬 {sc_title}</blockquote>")
     except Exception as e:
         sc_error = to_small_caps(str(e))
-        await query.message.edit_text(f"<blockquote>❌ <b>ғᴀɪʟᴇᴅ ᴛᴏ ᴘᴏsᴛ:</b> {sc_error}\n\n(ᴅɪᴅ ʏᴏᴜ ғᴏʀɢᴇᴛ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ?)</blockquote>")
-
-@Client.on_callback_query(filters.regex("^post_menu_back$"))
-async def post_menu_back(client: Client, query: CallbackQuery):
-    buttons = []
-    for code, full_name in SAGA_CATEGORIES.items():
-        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {full_name}"), callback_data=f"post_saga_{code}_1")])
-    text = "<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴀ ᴜɴɪᴠᴇʀsᴇ/sᴀɢᴀ ᴛᴏ ᴘᴜʙʟɪsʜ ᴀ ᴍᴏᴠɪᴇ ғʀᴏᴍ:</b></blockquote>"
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        await query.message.edit_text(f"<blockquote>❌ <b>ғᴀɪʟᴇᴅ ᴛᴏ ᴘᴏsᴛ:</b> {sc_error}</blockquote>")
