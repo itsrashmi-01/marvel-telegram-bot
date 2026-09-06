@@ -115,21 +115,19 @@ async def handle_mediafire_links(client: Client, message: Message):
         )
         await message.reply_text(text)
     else:
-        # All links collected! Save array and the root metadata to Database
-        await save_movie_files(
-            user_state["watch_order"], 
-            user_state["files"], 
-            user_state["audio"], 
-            user_state["release"]
-        )
-        
+        # Generate Final Preview but DO NOT save yet
         order = user_state["watch_order"]
         db_movie = await get_movie_by_order(order)
         
-        # Format the Preview
+        # Merge temporary state into the db_movie dict for accurate preview rendering
+        db_movie["files"] = user_state["files"]
+        db_movie["audio"] = user_state["audio"]
+        db_movie["release"] = user_state["release"]
+        
         caption = format_movie_post(db_movie)
         poster_url = db_movie.get("images", {}).get("poster_url", "")
         
+        # Show Save to Database Button
         buttons = [
             [InlineKeyboardButton(to_small_caps("💾 sᴀᴠᴇ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ"), callback_data=f"save_db_{order}")],
             [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="cancel_upload")]
@@ -147,9 +145,26 @@ async def save_to_database(client: Client, query: CallbackQuery):
     
     if not user_state:
         return await query.answer("sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ.", show_alert=True)
-        
+    
+    # NOW we officially execute the MongoDB save function
+    await save_movie_files(
+        user_state["watch_order"], 
+        user_state["files"], 
+        user_state["audio"], 
+        user_state["release"]
+    )
+    
     await query.message.edit_reply_markup(reply_markup=None)
-    await client.send_message(query.message.chat.id, "<blockquote>✅ <b>sᴀᴠᴇᴅ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ sᴜᴄᴄᴇssғᴜʟʟʏ!</b></blockquote>")
+    
+    sc_title = to_small_caps(f"{user_state['title']} {user_state['release']}")
+    success_text = (
+        f"<blockquote>✅ <b>sᴀᴠᴇᴅ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n\n"
+        f"🎬 {sc_title}\n\n"
+        f"👉 ᴜsᴇ ᴛʜᴇ '📝 ᴘᴜʙʟɪsʜ ᴘᴏsᴛs' ᴍᴇɴᴜ ᴛᴏ ᴘᴏsᴛ ɪᴛ ʟᴀᴛᴇʀ.</blockquote>"
+    )
+    await client.send_message(query.message.chat.id, success_text)
+    
+    # Clean up memory state
     del UPLOAD_STATE[query.from_user.id]
 
 @Client.on_callback_query(filters.regex("^cancel_upload$"))
