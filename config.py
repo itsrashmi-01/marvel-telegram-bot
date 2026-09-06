@@ -11,11 +11,7 @@ class Config:
     DUMP_CHANNEL_ID = int(os.environ.get("DUMP_CHANNEL_ID", 0)) 
     TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "") 
     BOT_USERNAME = os.environ.get("BOT_USERNAME", "") 
-    
-    # --- FILE STORE BOT CONFIG ---
     FILE_STORE_BOT_USERNAME = os.environ.get("FILE_STORE_BOT_USERNAME", "") 
     FILE_STORE_BOT_TOKEN = os.environ.get("FILE_STORE_BOT_TOKEN", "")
-    
-    # --- CUSTOM DOWNLOAD PAGE ---
-    # Add this in Render, e.g., https://your-site.blogspot.com/p/download.html
-    DOWNLOAD_PAGE_URL = os.environ.get("DOWNLOAD_PAGE_URL", "")
+    DOWNLOAD_PAGE_URL = os.environ.get("DOWNLOAD_PAGE_URL", "") 
+    SECRET_KEY = os.environ.get("SECRET_KEY", "")
