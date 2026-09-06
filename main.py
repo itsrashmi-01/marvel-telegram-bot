@@ -1,8 +1,6 @@
 import asyncio
 from hydrogram import Client, compose
 from config import Config
-
-
 async def main():
 
     print("Starting Multi-Bot Architecture...")
@@ -20,8 +18,6 @@ async def main():
             "root": "plugins"
         }
     )
-
-
     # ==========================================
     # FILE SENDER BOT
     # ==========================================
@@ -35,13 +31,14 @@ async def main():
             "root": "file_sender"
         }
     )
-
-
     # ==========================================
     # START BOTH BOTS
     # ==========================================
 
-    await compose([admin_bot, file_bot])
+    await compose([
+        admin_bot,
+        file_bot
+    ])
 
 
 if __name__ == "__main__":
