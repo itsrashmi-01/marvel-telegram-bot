@@ -18,11 +18,6 @@ SAGA_CATEGORIES = {
 
 @Client.on_message(filters.command("start") & filters.private)
 async def start_handler(client: Client, message: Message):
-    # --- DEEP LINK HANDLER PLACEHOLDER ---
-    if len(message.command) > 1:
-        # We will build this next to handle "?start=get_1"
-        pass
-        
     is_admin = (message.from_user.id == Config.ADMIN_ID)
     buttons = []
     if is_admin:
@@ -172,7 +167,6 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
         for ch in channels:
             sc_name = to_small_caps(ch['name'])
             channel_text += f"• <b>{sc_name}</b> (<code>{ch['id']}</code>)\n"
-            # Using slicing here to ensure the button text isn't too long for Telegram's limits
             buttons.append([InlineKeyboardButton(to_small_caps(f"🗑 ᴅᴇʟᴇᴛᴇ {ch['name'][:15]}"), callback_data=f"del_chan_{ch['id']}")])
     else:
         channel_text = "❌ ɴᴏ ᴄʜᴀɴɴᴇʟs ᴀᴅᴅᴇᴅ\n"
