@@ -26,19 +26,27 @@ async def handle_media(client: Client, message: Message):
     file_size = getattr(doc, "file_size", 0)
     info = extract_file_info(file_name, file_size)
 
+    # Set Root Details for Database
+    if "audio" not in user_state:
+        user_state["audio"] = info["audio"]
+        user_state["release"] = info["release"]
+    else:
+        # Upgrade audio to Dual if Hindi is found in a later file
+        if "Hindi" in info["audio"] and "Hindi" not in user_state["audio"]:
+            user_state["audio"] = "English + Hindi"
+
     dump_msg = await message.forward(Config.DUMP_CHANNEL_ID)
     secure_file_id = dump_msg.document.file_id if dump_msg.document else dump_msg.video.file_id
 
+    # The array now strictly contains only the required file details
     user_state["files"].append({
         "quality": info["quality"],
         "file_id": secure_file_id,
         "mediafire_link": None,
-        "file_size": info["size"],
-        "release": info["release"],
-        "audio": info["audio"]
+        "file_size": info["size"]
     })
 
-    sc_title = to_small_caps(user_state["title"])
+    sc_title = to_small_caps(f"{user_state['title']} {user_state['release']}")
     count = len(user_state["files"])
     qualities = [f["quality"] for f in user_state["files"]]
     sc_qualities = to_small_caps(', '.join(qualities))
@@ -73,12 +81,11 @@ async def start_mediafire_collection(client: Client, query: CallbackQuery):
     first_file = user_state["files"][0]
     sc_quality = to_small_caps(first_file['quality'])
     sc_size = to_small_caps(first_file['file_size'])
-    sc_release = to_small_caps(first_file['release'])
     
     text = (
         f"<blockquote>🔗 <b>ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋs ʀᴇǫᴜɪʀᴇᴅ</b>\n\n"
         f"ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
-        f"👉 <b>{sc_quality} {sc_release}</b> ({sc_size})</blockquote>"
+        f"👉 <b>{sc_quality}</b> ({sc_size})</blockquote>"
     )
     await query.message.edit_text(text)
 
@@ -100,21 +107,26 @@ async def handle_mediafire_links(client: Client, message: Message):
         next_file = user_state["files"][user_state["mf_index"]]
         sc_quality = to_small_caps(next_file['quality'])
         sc_size = to_small_caps(next_file['file_size'])
-        sc_release = to_small_caps(next_file['release'])
         
         text = (
             f"<blockquote>✅ ʟɪɴᴋ sᴀᴠᴇᴅ.\n\n"
             f"ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ғᴏʀ:\n"
-            f"👉 <b>{sc_quality} {sc_release}</b> ({sc_size})</blockquote>"
+            f"👉 <b>{sc_quality}</b> ({sc_size})</blockquote>"
         )
         await message.reply_text(text)
     else:
-        # All links collected! Generate Final Preview
+        # All links collected! Save array and the root metadata to Database
+        await save_movie_files(
+            user_state["watch_order"], 
+            user_state["files"], 
+            user_state["audio"], 
+            user_state["release"]
+        )
+        
         order = user_state["watch_order"]
         db_movie = await get_movie_by_order(order)
         
-        # Temporarily merge extracted files into movie dict for preview formatting
-        db_movie["files"] = user_state["files"] 
+        # Format the Preview
         caption = format_movie_post(db_movie)
         poster_url = db_movie.get("images", {}).get("poster_url", "")
         
@@ -131,14 +143,12 @@ async def handle_mediafire_links(client: Client, message: Message):
 @Client.on_callback_query(filters.regex(r"^save_db_(\d+)$"))
 async def save_to_database(client: Client, query: CallbackQuery):
     if query.from_user.id != Config.ADMIN_ID: return
-    order = int(query.data.split("_")[2])
     user_state = UPLOAD_STATE.get(query.from_user.id)
     
     if not user_state:
         return await query.answer("sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ.", show_alert=True)
         
-    await save_movie_files(order, user_state["files"])
-    await query.message.edit_reply_markup(reply_markup=None) # Remove buttons
+    await query.message.edit_reply_markup(reply_markup=None)
     await client.send_message(query.message.chat.id, "<blockquote>✅ <b>sᴀᴠᴇᴅ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ sᴜᴄᴄᴇssғᴜʟʟʏ!</b></blockquote>")
     del UPLOAD_STATE[query.from_user.id]
 
