@@ -2,9 +2,8 @@ export default {
   async fetch(request, env, ctx) {
     // 1. STRICT ORIGIN CHECKING (Blocks all requests not from your website)
     const origin = request.headers.get("Origin") || request.headers.get("Referer") || "";
-    const allowedDomain = env.ALLOWED_DOMAIN || ""; // e.g., "musicjjjdjdj.blogspot.com"
+    const allowedDomain = env.ALLOWED_DOMAIN || ""; 
     
-    // Only enforce origin check if ALLOWED_DOMAIN is set in Cloudflare variables
     if (allowedDomain && !origin.includes(allowedDomain)) {
       return new Response(JSON.stringify({ error: "Forbidden: Unauthorized Origin" }), { 
         status: 403,
@@ -50,7 +49,6 @@ export default {
 
       // 3. VERIFY CRYPTOGRAPHIC SIGNATURE
       const encoder = new TextEncoder();
-      // This hashes exactly what the Python bot hashed
       const data = encoder.encode(`${id}${t}${env.SECRET_KEY}`);
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -63,24 +61,26 @@ export default {
         });
       }
 
-      // 4. FETCH DATA FROM MONGODB ATLAS
-      const mongoPayload = {
-        dataSource: "Cluster0", // Replace if your cluster name is different
-        database: "marvel_bot", 
-        collection: "movies",   
-        filter: { watch_order: parseInt(id) }
-      };
-
-      const mongoResponse = await fetch(`${env.MONGO_ENDPOINT}/action/findOne`, {
+      // 4. FETCH DATA FROM YOUR RENDER SERVER
+      const renderBaseUrl = (env.RENDER_URL || "").replace(/\/+$/, "");
+      const renderResponse = await fetch(`${renderBaseUrl}/api/fetch`, {
         method: "POST",
         headers: { 
-            "Content-Type": "application/json", 
-            "api-key": env.MONGO_API_KEY 
+            "Content-Type": "application/json",
+            "X-Worker-Secret": env.SECRET_KEY || ""
         },
-        body: JSON.stringify(mongoPayload)
+        body: JSON.stringify({ id: id })
       });
 
-      const dbData = await mongoResponse.json();
+      if (!renderResponse.ok) {
+        const errorText = await renderResponse.text();
+        return new Response(JSON.stringify({ error: `Backend Error: ${renderResponse.status} - ${errorText}` }), {
+            status: renderResponse.status,
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+
+      const dbData = await renderResponse.json();
       if (!dbData.document) {
         return new Response(JSON.stringify({ error: "Movie not found in database." }), { 
             status: 404, 
@@ -92,7 +92,7 @@ export default {
 
       // 5. ROUTE ACTIONS SECURELY
       if (action === "meta") {
-        // Send ONLY safe UI data to the frontend, stripping all actual download links
+        // Send safe metadata to the frontend; exclude direct download URLs
         const safeData = {
           title: movieData.title,
           poster: movieData.images?.poster_url || "",
@@ -105,7 +105,6 @@ export default {
       } 
       
       else if (action === "get_link") {
-        // Return the requested file link ONLY when explicitly asked via click
         if (!movieData.files) {
             return new Response(JSON.stringify({ error: "No files available for this movie." }), { 
                 status: 404, 
@@ -113,7 +112,6 @@ export default {
             });
         }
         
-        // Find the specific file matching the requested quality
         const file = movieData.files.find(f => f.quality === quality);
         if (!file) {
             return new Response(JSON.stringify({ error: "Requested quality not found." }), { 
@@ -122,7 +120,6 @@ export default {
             });
         }
         
-        // Send back the raw link
         return new Response(JSON.stringify({ url: file.mediafire_link || file.url }), { 
             status: 200, 
             headers: { "Content-Type": "application/json", ...corsHeaders } 
@@ -135,7 +132,7 @@ export default {
       });
 
     } catch (error) {
-      return new Response(JSON.stringify({ error: "Server Error", details: error.message }), { 
+      return new Response(JSON.stringify({ error: `Server Error: ${error.message}` }), { 
           status: 500, 
           headers: { "Content-Type": "application/json", ...corsHeaders } 
       });
