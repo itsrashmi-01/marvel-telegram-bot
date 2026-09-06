@@ -22,17 +22,12 @@ async def delete_after_delay(client: Client, chat_id: int, message_ids: list, de
 # ==========================================
 @Client.on_message(filters.regex(r"^/start get_(\d+)") & filters.private)
 async def handle_deep_link_download(client: Client, message: Message):
-    # 1. Extract the watch order from the regex match
     order = int(message.matches[0].group(1))
-    
-    # 2. Fetch the movie from the database
     movie = await get_movie_by_order(order)
+    
     if not movie or not movie.get("files"):
-        text = "<blockquote>❌ <b>sᴏʀʀʏ!</b>\n\nᴛʜɪs ᴍᴏᴠɪᴇ ɪs ᴇɪᴛʜᴇʀ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ᴏʀ ᴛʜᴇ ʟɪɴᴋ ɪs ʙʀᴏᴋᴇɴ.</blockquote>"
-        await message.reply_text(text)
-        return
+        return await message.reply_text("<blockquote>❌ <b>sᴏʀʀʏ!</b>\n\nᴛʜɪs ᴍᴏᴠɪᴇ ɪs ᴇɪᴛʜᴇʀ ᴜɴᴀᴠᴀɪʟᴀʙʟᴇ ᴏʀ ᴛʜᴇ ʟɪɴᴋ ɪs ʙʀᴏᴋᴇɴ.</blockquote>")
 
-    # 3. Send a warning message about the 5-minute auto-delete
     sc_title = to_small_caps(movie['title'])
     warning_text = (
         f"<blockquote>⚠️ <b>ᴀᴛᴛᴇɴᴛɪᴏɴ!</b>\n\n"
@@ -41,16 +36,12 @@ async def handle_deep_link_download(client: Client, message: Message):
         f"👉 ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴛʜᴇᴍ ᴛᴏ ʏᴏᴜʀ 'sᴀᴠᴇᴅ ᴍᴇssᴀɢᴇs' ᴏʀ ᴅᴏᴡɴʟᴏᴀᴅ ᴛʜᴇᴍ ɪᴍᴍᴇᴅɪᴀᴛᴇʟʏ!</blockquote>"
     )
     warning_msg = await message.reply_text(warning_text)
-    
-    # Keep track of all messages to delete them later
-    messages_to_delete = [warning_msg.id, message.id] 
+    messages_to_delete = [warning_msg.id, message.id]
 
-    # 4. Loop through the database files and send them
     for f in movie["files"]:
         quality = to_small_caps(f.get("quality", "Unknown"))
         size = to_small_caps(f.get("file_size", "Unknown"))
         
-        # Build the MediaFire button
         buttons = []
         if f.get("mediafire_link"):
             buttons.append([InlineKeyboardButton(to_small_caps(f"🔗 ᴍᴇᴅɪᴀғɪʀᴇ ʟɪɴᴋ ({quality})"), url=f["mediafire_link"])])
@@ -64,7 +55,6 @@ async def handle_deep_link_download(client: Client, message: Message):
         )
 
         try:
-            # send_cached_media automatically detects if it's a video or document based on file_id
             sent_msg = await client.send_cached_media(
                 chat_id=message.chat.id,
                 file_id=f["file_id"],
@@ -72,11 +62,17 @@ async def handle_deep_link_download(client: Client, message: Message):
                 reply_markup=markup
             )
             messages_to_delete.append(sent_msg.id)
-            # Short sleep to prevent flood limits when sending multiple qualities
-            await asyncio.sleep(1)
+            await asyncio.sleep(1) # Prevent flood waits when sending multiple files
         except Exception as e:
-            print(f"Error sending file_id {f.get('file_id')}: {e}")
+            print(f"File error: {e}")
 
-    # 5. Trigger the auto-delete countdown in the background (300 seconds = 5 minutes)
-    if len(messages_to_delete) > 2: # Ensures we actually sent files
+    # Launch auto-delete countdown (300 seconds = 5 minutes)
+    if len(messages_to_delete) > 2:
         asyncio.create_task(delete_after_delay(client, message.chat.id, messages_to_delete, 300))
+
+# ==========================================
+# FALLBACK HANDLER
+# ==========================================
+@Client.on_message(filters.private & ~filters.regex(r"^/start get_(\d+)"))
+async def file_bot_fallback(client: Client, message: Message):
+    await message.reply_text("<blockquote>👋 ɪ ᴀᴍ ᴀ ғɪʟᴇ ᴘʀᴏᴠɪᴅᴇʀ ʙᴏᴛ.\n\nᴘʟᴇᴀsᴇ ᴜsᴇ ᴍʏ ʟɪɴᴋs ɪɴ ᴛʜᴇ ᴍᴀɪɴ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ ᴍᴏᴠɪᴇs.</blockquote>")
