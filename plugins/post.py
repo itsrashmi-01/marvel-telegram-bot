@@ -2,7 +2,7 @@ import asyncio
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import Config
-from database import movies_col, get_movie_by_order, get_target_channels
+from database import movies_col, get_target_channels
 from plugins.start import SAGA_CATEGORIES
 from template import format_movie_post, get_download_button, to_small_caps
 
@@ -113,45 +113,3 @@ async def execute_bulk_post(client: Client, query: CallbackQuery):
             pass 
             
     await query.message.reply_text("<blockquote>✅ <b>ᴀʟʟ ᴍᴏᴠɪᴇs ᴜᴘʟᴏᴀᴅᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b></blockquote>")
-
-# --- FOR SINGLE UPLOADS TRIGGERED AFTER ADDING MEDIAFIRE LINKS ---
-@Client.on_callback_query(filters.regex(r"^select_chan_post_(\d+)$"))
-async def select_channel_single(client: Client, query: CallbackQuery):
-    """Called from upload.py to select a channel for a single movie"""
-    order = int(query.data.split("_")[3])
-    channels = await get_target_channels()
-    if not channels:
-        return await query.answer("ɴᴏ ᴄʜᴀɴɴᴇʟs ᴀᴅᴅᴇᴅ!", show_alert=True)
-        
-    buttons = []
-    for ch in channels:
-        buttons.append([InlineKeyboardButton(to_small_caps(f"📢 {ch['name']}"), callback_data=f"single_post_{order}_{ch['id']}")])
-        
-    await query.message.edit_text("<blockquote>📢 <b>sᴇʟᴇᴄᴛ ᴅᴇsᴛɪɴᴀᴛɪᴏɴ ᴄʜᴀɴɴᴇʟ:</b></blockquote>", reply_markup=InlineKeyboardMarkup(buttons))
-
-@Client.on_callback_query(filters.regex(r"^single_post_(\d+)_(-?\d+)$"))
-async def publish_single_post(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
-    order = int(query.data.split("_")[2])
-    channel_id = int(query.data.split("_")[3])
-    
-    movie = await get_movie_by_order(order)
-    await query.answer("ᴘᴜʙʟɪsʜɪɴɢ...")
-    
-    caption = format_movie_post(movie)
-    bot_info = await client.get_me()
-    deep_link = f"https://t.me/{bot_info.username}?start=get_{order}"
-    markup = get_download_button(deep_link)
-    poster_url = movie.get("images", {}).get("poster_url")
-
-    try:
-        if poster_url:
-            await client.send_photo(channel_id, photo=poster_url, caption=caption, reply_markup=markup)
-        else:
-            await client.send_message(channel_id, text=caption, reply_markup=markup)
-            
-        sc_title = to_small_caps(movie['title'])
-        await query.message.edit_text(f"<blockquote>✅ <b>sᴜᴄᴄᴇssғᴜʟʟʏ ᴘᴜʙʟɪsʜᴇᴅ ᴛᴏ ᴄʜᴀɴɴᴇʟ!</b>\n\n🎬 {sc_title}</blockquote>")
-    except Exception as e:
-        sc_error = to_small_caps(str(e))
-        await query.message.edit_text(f"<blockquote>❌ <b>ғᴀɪʟᴇᴅ ᴛᴏ ᴘᴏsᴛ:</b> {sc_error}</blockquote>")
