@@ -97,8 +97,9 @@ async def execute_bulk_post(client: Client, query: CallbackQuery):
 
     await query.message.edit_text("<blockquote>🚀 <b>ᴀᴜᴛᴏ-ᴜᴘʟᴏᴀᴅɪɴɢ ᴍᴏᴠɪᴇs ᴏɴᴇ ʙʏ ᴏɴᴇ...</b> ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ.</blockquote>")
     
-    # FETCHES YOUR FILE BOT USERNAME FROM CONFIG (ENVIRONMENT VARIABLE)
-    file_bot_username = getattr(Config, "FILE_STORE_BOT_USERNAME", "SetupYourFileBotUsernameInConfig")
+    # SAFETY FIX: Strip the '@' symbol if accidentally included in config
+    raw_bot_username = getattr(Config, "FILE_STORE_BOT_USERNAME", "SetupYourFileBotUsernameInConfig")
+    file_bot_username = raw_bot_username.replace("@", "")
     
     for movie in available_movies:
         caption = format_movie_post(movie)
