@@ -1,3 +1,3 @@
-name = "movie-download-api"
+name = "marvel-telegram-bot"
 main = "worker/worker.js"
 compatibility_date = "2026-09-06"
