@@ -1,4 +1,7 @@
 import asyncio
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
 from hydrogram import Client, compose
 from config import Config
 
@@ -12,7 +15,7 @@ admin_bot = Client(
     bot_token=Config.BOT_TOKEN,
     plugins=dict(
         root="plugins", 
-        exclude=["download"] # Prevents the admin bot from handling deep links
+        exclude=["download"] 
     )
 )
 
@@ -26,17 +29,14 @@ file_bot = Client(
     bot_token=Config.FILE_STORE_BOT_TOKEN,
     plugins=dict(
         root="plugins", 
-        include=["download"] # Forces this bot to strictly act as a file provider
+        include=["download"] 
     )
 )
 
 # ==========================================
 # 3. RUN BOTH BOTS
 # ==========================================
-async def main():
-    print("Starting Multi-Bot Architecture...")
-    # compose() gracefully runs multiple clients simultaneously
-    await compose([admin_bot, file_bot])
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("Starting Multi-Bot Architecture...")
+    # Run compose directly on the global loop we created at the top
+    loop.run_until_complete(compose([admin_bot, file_bot]))
