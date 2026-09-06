@@ -100,13 +100,20 @@ async def get_all_movies():
     cursor = movies_col.find().sort("watch_order", 1)
     return await cursor.to_list(length=200)
 
-async def get_target_channel():
+# --- NEW MULTI-CHANNEL DATABASE FUNCTIONS ---
+async def get_target_channels():
     doc = await settings_col.find_one({"_id": "bot_settings"})
-    return doc.get("channel_id") if doc else None
+    return doc.get("channels", []) if doc else []
 
-async def set_target_channel(channel_id: int):
+async def add_target_channel(channel_id: int, channel_name: str):
     await settings_col.update_one(
         {"_id": "bot_settings"},
-        {"$set": {"channel_id": channel_id}},
+        {"$addToSet": {"channels": {"id": channel_id, "name": channel_name}}},
         upsert=True
+    )
+
+async def remove_target_channel(channel_id: int):
+    await settings_col.update_one(
+        {"_id": "bot_settings"},
+        {"$pull": {"channels": {"id": channel_id}}}
     )
