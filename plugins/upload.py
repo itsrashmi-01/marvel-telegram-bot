@@ -22,9 +22,18 @@ async def handle_media(client: Client, message: Message):
         return
 
     doc = message.document or message.video
-    file_name = getattr(doc, "file_name", "")
-    file_size = getattr(doc, "file_size", 0)
-    info = extract_file_info(file_name, file_size)
+    raw_file_name = getattr(doc, "file_name", "") or ""
+    caption_text = message.caption or ""
+    
+    # Combine filename and caption so resolution/audio tags in captions are never missed
+    combined_meta_text = f"{raw_file_name} {caption_text}".strip()
+    file_size = getattr(doc, "file_size", 0) or 0
+    
+    # Also grab native video dimensions in case filename/caption has no resolution tag
+    vid_height = getattr(doc, "height", 0) or 0
+    vid_width = getattr(doc, "width", 0) or 0
+
+    info = extract_file_info(combined_meta_text, file_size, vid_height, vid_width)
 
     # Set Root Details for Database
     if "audio" not in user_state:
@@ -38,17 +47,23 @@ async def handle_media(client: Client, message: Message):
     dump_msg = await message.forward(Config.DUMP_CHANNEL_ID)
     secure_file_id = dump_msg.document.file_id if dump_msg.document else dump_msg.video.file_id
 
-    # The array now strictly contains only the required file details
-    user_state["files"].append({
+    # If the same quality already exists in the current upload batch, replace it or keep distinct
+    existing_idx = next((i for i, f in enumerate(user_state["files"]) if f["quality"] == info["quality"]), None)
+    new_file_obj = {
         "quality": info["quality"],
         "file_id": secure_file_id,
         "mediafire_link": None,
         "file_size": info["size"]
-    })
+    }
+    
+    if existing_idx is not None:
+        user_state["files"][existing_idx] = new_file_obj
+    else:
+        user_state["files"].append(new_file_obj)
 
     sc_title = to_small_caps(f"{user_state['title']} {user_state['release']}")
     count = len(user_state["files"])
-    qualities = [f["quality"] for f in user_state["files"]]
+    qualities = [f"{f['quality']} ({f['file_size']})" for f in user_state["files"]]
     sc_qualities = to_small_caps(', '.join(qualities))
     
     summary_text = (
@@ -64,7 +79,11 @@ async def handle_media(client: Client, message: Message):
     markup = InlineKeyboardMarkup(buttons)
 
     if "status_msg_id" in user_state:
-        await client.edit_message_text(chat_id=message.chat.id, message_id=user_state["status_msg_id"], text=summary_text, reply_markup=markup)
+        try:
+            await client.edit_message_text(chat_id=message.chat.id, message_id=user_state["status_msg_id"], text=summary_text, reply_markup=markup)
+        except Exception:
+            status_msg = await message.reply_text(summary_text, reply_markup=markup)
+            user_state["status_msg_id"] = status_msg.id
     else:
         status_msg = await message.reply_text(summary_text, reply_markup=markup)
         user_state["status_msg_id"] = status_msg.id
@@ -100,7 +119,7 @@ async def handle_mediafire_links(client: Client, message: Message):
         return
 
     idx = user_state["mf_index"]
-    user_state["files"][idx]["mediafire_link"] = message.text
+    user_state["files"][idx]["mediafire_link"] = message.text.strip()
     user_state["mf_index"] += 1
 
     if user_state["mf_index"] < len(user_state["files"]):
