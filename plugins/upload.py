@@ -58,8 +58,8 @@ async def handle_media(client: Client, message: Message):
         f"sᴇɴᴅ ᴍᴏʀᴇ ғɪʟᴇs, ᴏʀ ᴄʟɪᴄᴋ ᴄᴏɴғɪʀᴍ.</blockquote>"
     )
     buttons = [
-        [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ & ᴀᴅᴅ ʟɪɴᴋs", callback_data="confirm_files")],
-        [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ ᴜᴘʟᴏᴀᴅ", callback_data="cancel_upload")]
+        [InlineKeyboardButton("✔ ᴄᴏɴғɪʀᴍ & ᴀᴅᴅ ʟɪɴᴋs", callback_data="confirm_files")],
+        [InlineKeyboardButton("✘ ᴄᴀɴᴄᴇʟ ᴜᴘʟᴏᴀᴅ", callback_data="cancel_upload")]
     ]
     markup = InlineKeyboardMarkup(buttons)
 
@@ -130,7 +130,7 @@ async def handle_mediafire_links(client: Client, message: Message):
         # Show Save to Database Button
         buttons = [
             [InlineKeyboardButton(to_small_caps("💾 sᴀᴠᴇ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ"), callback_data=f"save_db_{order}")],
-            [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="cancel_upload")]
+            [InlineKeyboardButton("✘ ᴄᴀɴᴄᴇʟ", callback_data="cancel_upload")]
         ]
         
         if poster_url:
@@ -173,6 +173,6 @@ async def cancel_upload(client: Client, query: CallbackQuery):
         del UPLOAD_STATE[query.from_user.id]
         if query.message.photo:
             await query.message.delete()
-            await client.send_message(query.message.chat.id, "<blockquote>❌ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.</blockquote>")
+            await client.send_message(query.message.chat.id, "<blockquote>✘ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.</blockquote>")
         else:
-            await query.message.edit_text("<blockquote>❌ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.</blockquote>")
+            await query.message.edit_text("<blockquote>✘ ᴜᴘʟᴏᴀᴅ ᴄᴀɴᴄᴇʟʟᴇᴅ. sᴇssɪᴏɴ ᴄʟᴇᴀʀᴇᴅ.</blockquote>")
