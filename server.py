@@ -28,16 +28,15 @@ async def fetch_movie(request):
             return web.json_response({"document": None})
 
         # --- DYNAMIC TELEGRAM LINK INJECTION ---
-        # Grabs your current bot username from environment variables and builds the deep link dynamically
+        # Builds a unique deep link per quality index (?start=file_<watch_order>_<idx>)
+        # so the File Store Bot delivers the actual video file instead of the web page link
         raw_bot_username = getattr(Config, "FILE_STORE_BOT_USERNAME", "")
-        bot_username = raw_bot_username.replace("@", "")
+        bot_username = raw_bot_username.replace("@", "").strip()
         
-        if "files" in movie and bot_username:
-            dynamic_link = f"https://t.me/{bot_username}?start=get_{movie.get('watch_order')}"
-            
-            for file_obj in movie["files"]:
-                # You can change 'dynamic_link' here if your bot uses file_id instead of watch_order
-                file_obj["telegram_link"] = dynamic_link
+        if "files" in movie and isinstance(movie["files"], list) and bot_username:
+            order = movie.get("watch_order")
+            for idx, file_obj in enumerate(movie["files"]):
+                file_obj["telegram_link"] = f"https://t.me/{bot_username}?start=file_{order}_{idx}"
 
         # 3. BULLETPROOF JSON SERIALIZATION
         # Forces ObjectIds, datetimes, and other complex MongoDB types into strings
