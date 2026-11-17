@@ -108,7 +108,7 @@ async def list_movies(client: Client, message: Message):
     uploaded_set = {doc["watch_order"] for doc in uploaded_movies}
     
     output = "🎬 **MARVEL COMPLETE WATCH ORDER**\n"
-    output += "🟢 = Available | 🔴 = Pending Upload\n\n"
+    output += "✔ = Available | ✘ = Pending Upload\n\n"
     
     current_saga = ""
     for item in RAW_MARVEL_LIST:
@@ -123,9 +123,9 @@ async def list_movies(client: Client, message: Message):
         
         # Use saga_rank for the list numbering instead of the global order
         if order in uploaded_set:
-            output += f"🟢 `{saga_rank}.` {title}\n"
+            output += f"✔ `{saga_rank}.` {title}\n"
         else:
-            output += f"🔴 `{saga_rank}.` {title}\n"
+            output += f"✘ `{saga_rank}.` {title}\n"
 
     await status_msg.delete()
 
