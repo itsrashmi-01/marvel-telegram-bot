@@ -1,3 +1,56 @@
+// Helper: Scrapes MediaFire page for the raw direct-download URL and exact file size
+async function resolveMediaFire(mfUrl) {
+  if (!mfUrl || !mfUrl.includes("mediafire.com")) {
+    return { directUrl: mfUrl, size: "" };
+  }
+  try {
+    const res = await fetch(mfUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    const html = await res.text();
+
+    // 1. Extract raw direct download link (https://downloadXXXX.mediafire.com/...)
+    const linkMatch =
+      html.match(/href="(https?:\/\/download\d+\.mediafire\.com\/[^"]+)"/i) ||
+      html.match(/id="downloadButton"[^>]*href="([^"]+)"/i);
+
+    // 2. Extract file size from button text e.g. "Download (1.24 GB)"
+    const sizeMatch =
+      html.match(/Download\s*\(([\d.]+\s*[KMGT]?B)\)/i) ||
+      html.match(/<li>File size:\s*<span>([\d.]+\s*[KMGT]?B)<\/span>/i);
+
+    return {
+      directUrl: linkMatch ? linkMatch[1] : mfUrl,
+      size: sizeMatch ? sizeMatch[1] : ""
+    };
+  } catch (e) {
+    return { directUrl: mfUrl, size: "" };
+  }
+}
+
+// Helper: Formats bytes if your DB stores size as a raw number
+function formatSize(val) {
+  if (!val) return "";
+  if (typeof val === "number" || /^\d+$/.test(String(val))) {
+    const bytes = Number(val);
+    if (bytes <= 0) return "";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  }
+  return String(val);
+}
+
+// Helper: Extracts 480p / 720p / 1080p / 4K from filename or title if missing
+function normalizeQuality(q, fallbackStr = "") {
+  if (q && q.trim() !== "") return q.trim();
+  const match = fallbackStr.match(/\b(480p|720p|1080p|1440p|2160p|4K)\b/i);
+  return match ? match[1] : "HD";
+}
+
 export default {
   async fetch(request, env, ctx) {
     // 1. STRICT ORIGIN CHECKING
@@ -89,15 +142,25 @@ export default {
 
       // 5. ROUTE ACTIONS SECURELY
       if (action === "meta") {
-        const safeData = {
+        const rawFiles = movieData.files || [];
+        
+        // Resolve sizes & qualities (auto-scrapes MediaFire if size is missing in DB)
+        const filesWithMeta = await Promise.all(rawFiles.map(async (f) => {
+          const q = normalizeQuality(f.quality, f.file_name || f.title || f.mediafire_link || "");
+          let s = formatSize(f.size || f.file_size || f.size_str || f.fileSize || "");
+          
+          const mfLink = f.mediafire_link || f.url || "";
+          if ((!s || s.toLowerCase() === "available" || s === "Unknown Size") && mfLink.includes("mediafire.com")) {
+            const resolved = await resolveMediaFire(mfLink);
+            if (resolved.size) s = resolved.size;
+          }
+          return { quality: q, size: s };
+        }));
+
+        return new Response(JSON.stringify({
           title: movieData.title,
-          files: movieData.files ? movieData.files.map(f => ({
-              quality: f.quality,
-              // dynamically targets the exact database field
-              size: f.size || f.file_size || f.size_str || f.fileSize || "" 
-          })) : []
-        };
-        return new Response(JSON.stringify(safeData), { 
+          files: filesWithMeta
+        }), { 
             status: 200, 
             headers: { "Content-Type": "application/json", ...corsHeaders } 
         });
@@ -108,28 +171,35 @@ export default {
             return new Response(JSON.stringify({ error: "No files available for this movie." }), { status: 404, headers: corsHeaders });
         }
         
-        const file = movieData.files.find(f => f.quality === quality);
+        const file = movieData.files.find(f => normalizeQuality(f.quality, f.file_name || f.title || "") === quality) 
+                  || movieData.files.find(f => f.quality === quality);
+
         if (!file) {
             return new Response(JSON.stringify({ error: "Requested quality not found." }), { status: 404, headers: corsHeaders });
         }
         
-        let finalUrl = "";
-        
-        // Routes to the dynamically injected telegram_link from server.py, or falls back to mediafire
         if (type === "telegram") {
-            finalUrl = file.telegram_link || file.url; 
+            const tgUrl = file.telegram_link || file.url;
+            if (!tgUrl) return new Response(JSON.stringify({ error: "Telegram link is missing." }), { status: 404, headers: corsHeaders });
+            return new Response(JSON.stringify({ url: tgUrl, direct: false }), { 
+                status: 200, 
+                headers: { "Content-Type": "application/json", ...corsHeaders } 
+            });
         } else {
-            finalUrl = file.mediafire_link || file.url; 
+            const rawLink = file.mediafire_link || file.url;
+            if (!rawLink) return new Response(JSON.stringify({ error: "Download link is missing." }), { status: 404, headers: corsHeaders });
+            
+            // Extract the direct download binary URL from MediaFire
+            const resolved = await resolveMediaFire(rawLink);
+            return new Response(JSON.stringify({ 
+                url: resolved.directUrl, 
+                size: resolved.size,
+                direct: true 
+            }), { 
+                status: 200, 
+                headers: { "Content-Type": "application/json", ...corsHeaders } 
+            });
         }
-
-        if (!finalUrl) {
-            return new Response(JSON.stringify({ error: "Download link is missing." }), { status: 404, headers: corsHeaders });
-        }
-
-        return new Response(JSON.stringify({ url: finalUrl }), { 
-            status: 200, 
-            headers: { "Content-Type": "application/json", ...corsHeaders } 
-        });
       }
 
       return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400, headers: corsHeaders });
