@@ -49,7 +49,6 @@ async def handle_media(client: Client, message: Message):
     existing_qualities = {f["quality"] for f in user_state["files"]}
     
     if final_q in existing_qualities:
-        # If the first one was plain "1080p" and this second one is smaller, or vice versa, keep them distinct
         counter = 2
         while f"{base_q} #{counter}" in existing_qualities:
             counter += 1
@@ -58,6 +57,7 @@ async def handle_media(client: Client, message: Message):
     user_state["files"].append({
         "quality": final_q,
         "file_id": secure_file_id,
+        "msg_id": dump_msg.id,
         "mediafire_link": None,
         "file_size": info["size"]
     })
