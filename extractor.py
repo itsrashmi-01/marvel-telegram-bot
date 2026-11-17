@@ -1,5 +1,8 @@
 import re
 
+# ==========================================
+# FILE FORMATTER & METADATA EXTRACTOR
+# ==========================================
 def get_readable_size(size_in_bytes: int) -> str:
     """Converts bytes to a human-readable format (e.g., 1.5 GB)."""
     if not size_in_bytes:
@@ -24,7 +27,6 @@ def infer_resolution_from_meta(height: int, width: int, file_size: int) -> str:
     elif max_dim > 0:
         return "480p"
 
-    # If sent as a document without video dimensions and no text match, infer from size
     mb = (file_size or 0) / (1024 * 1024)
     if mb > 3200:
         return "2160p"
@@ -37,8 +39,6 @@ def infer_resolution_from_meta(height: int, width: int, file_size: int) -> str:
 def extract_file_info(filename: str, file_size: int, height: int = 0, width: int = 0) -> dict:
     """Automatically extracts rich metadata from a release filename/caption and video attributes."""
     clean_input = filename or ""
-    
-    # Replace dots, underscores, brackets, parens, and hyphens with spaces so regex always matches
     name_lower = re.sub(r'[._\[\]\(\)\-\+]+', ' ', clean_input.lower())
     
     # --- 1. EXTRACT LANGUAGES ---
@@ -63,7 +63,6 @@ def extract_file_info(filename: str, file_size: int, height: int = 0, width: int
 
     # --- 2. EXTRACT RESOLUTION ---
     res_val = None
-    # Matches 480p, 720p, 1080p, 2160p, 4k, 1920x1080, 1280x720, etc.
     res_match = re.search(r'(?:^|\s|\b)(480p|540p|720p|1080p|1440p|2160p|4k|uhd)(?:\s|\b|$)', name_lower)
     if res_match:
         res = res_match.group(1)
@@ -75,11 +74,22 @@ def extract_file_info(filename: str, file_size: int, height: int = 0, width: int
     elif re.search(r'3840\s*x\s*\d+', name_lower):
         res_val = "2160p"
 
-    # Fallback to native video dimensions or file size if filename had no resolution tag
     if not res_val:
         res_val = infer_resolution_from_meta(height, width, file_size)
 
-    # --- 3. EXTRACT SOURCE ---
+    # --- 3. DETECT 10-BIT / HEVC VARIANTS FOR QUALITY LABEL ---
+    is_10bit = bool(re.search(r'\b(10\s*bit|10bit|hi10p)\b', name_lower))
+    is_hevc = bool(re.search(r'\b(hevc|x265|h265)\b', name_lower))
+
+    quality_label = res_val
+    if is_10bit and is_hevc:
+        quality_label = f"{res_val} 10bit HEVC"
+    elif is_10bit:
+        quality_label = f"{res_val} 10bit"
+    elif is_hevc:
+        quality_label = f"{res_val} HEVC"
+
+    # --- 4. EXTRACT SOURCE ---
     source_val = None
     if re.search(r'\b(web\s*dl)\b', name_lower): source_val = "WEB-DL"
     elif re.search(r'\b(web\s*rip)\b', name_lower): source_val = "WEBRip"
@@ -96,7 +106,8 @@ def extract_file_info(filename: str, file_size: int, height: int = 0, width: int
 
     info = {
         "Size_Bytes": file_size,
-        "quality": res_val,
+        "quality": quality_label,
+        "base_resolution": res_val,
         "release": source_val if source_val else "HD",
         "audio": " + ".join(langs) if langs else "English",
         "size": get_readable_size(file_size)
