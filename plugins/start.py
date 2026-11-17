@@ -106,7 +106,7 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     
     buttons = []
     for item in saga_movies[start_idx : start_idx + items_per_page]:
-        status_icon = "🟢" if item["order"] in uploaded_set else "🔴"
+        status_icon = "✔" if item["order"] in uploaded_set else "✘"
         btn_text = f"{status_icon} " + to_small_caps(item['title'])
         buttons.append([InlineKeyboardButton(btn_text, callback_data=f"init_upload_{item['order']}")])
         
@@ -119,7 +119,7 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     sc_saga_name = to_small_caps(full_saga_name)
     text = (
         f"<blockquote>📂 <b>{sc_saga_name}</b>\n\n"
-        f"🟢 = ᴜᴘʟᴏᴀᴅᴇᴅ | 🔴 = ᴍɪssɪɴɢ\n"
+        f"✔ = ᴜᴘʟᴏᴀᴅᴇᴅ | ✘ = ᴍɪssɪɴɢ\n"
         f"sᴇʟᴇᴄᴛ ᴀ ᴍᴏᴠɪᴇ ᴛᴏ ᴜᴘʟᴏᴀᴅ:</blockquote>"
     )
     if query.message.photo:
@@ -172,7 +172,7 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
             channel_text += f"• <b>{sc_name}</b> (<code>{ch['id']}</code>)\n"
             buttons.append([InlineKeyboardButton(to_small_caps(f"🗑 ᴅᴇʟᴇᴛᴇ {ch['name'][:15]}"), callback_data=f"del_chan_{ch['id']}")])
     else:
-        channel_text = "❌ ɴᴏ ᴄʜᴀɴɴᴇʟs ᴀᴅᴅᴇᴅ\n"
+        channel_text = "✘ ɴᴏ ᴄʜᴀɴɴᴇʟs ᴀᴅᴅᴇᴅ\n"
         
     buttons.append([InlineKeyboardButton(to_small_caps("➕ ᴀᴅᴅ ᴄʜᴀɴɴᴇʟ"), callback_data="set_new_channel")])
     buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")])
@@ -197,7 +197,7 @@ async def delete_channel(client: Client, query: CallbackQuery):
 async def ask_for_channel(client: Client, query: CallbackQuery):
     if query.from_user.id != Config.ADMIN_ID: return
     WAITING_FOR_CHANNEL[query.from_user.id] = True
-    buttons = [[InlineKeyboardButton(to_small_caps("❌ ᴄᴀɴᴄᴇʟ"), callback_data="manage_channel")]]
+    buttons = [[InlineKeyboardButton(to_small_caps("✘ ᴄᴀɴᴄᴇʟ"), callback_data="manage_channel")]]
     text = (
         "<blockquote>👇 <b>ʜᴏᴡ ᴛᴏ ʟɪɴᴋ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ:</b>\n\n"
         "𝟷. ɢᴏ ᴛᴏ ʏᴏᴜʀ ᴛᴀʀɢᴇᴛ ᴄʜᴀɴɴᴇʟ.\n"
@@ -219,7 +219,7 @@ async def capture_channel_input(client: Client, message: Message):
     else:
         try: channel_id = int(message.text)
         except (ValueError, TypeError):
-            return await message.reply_text("<blockquote>❌ ɪɴᴠᴀʟɪᴅ ɪɴᴘᴜᴛ. ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ᴏʀ sᴇɴᴅ ᴀ -𝟷𝟶𝟶 ɪᴅ.</blockquote>")
+            return await message.reply_text("<blockquote>✘ ɪɴᴠᴀʟɪᴅ ɪɴᴘᴜᴛ. ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ᴏʀ sᴇɴᴅ ᴀ -𝟷𝟶𝟶 ɪᴅ.</blockquote>")
             
     try:
         chat = await client.get_chat(channel_id)
@@ -233,7 +233,7 @@ async def capture_channel_input(client: Client, message: Message):
     sc_channel_name = to_small_caps(channel_name)
     buttons = [[InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴄʜᴀɴɴᴇʟ ᴍᴇɴᴜ"), callback_data="manage_channel")]]
     text = (
-        f"<blockquote>✅ <b>ᴄʜᴀɴɴᴇʟ sᴜᴄᴄᴇssғᴜʟʟʏ ᴀᴅᴅᴇᴅ!</b>\n\n"
+        f"<blockquote>✔ <b>ᴄʜᴀɴɴᴇʟ sᴜᴄᴄᴇssғᴜʟʟʏ ᴀᴅᴅᴇᴅ!</b>\n\n"
         f"<b>ɴᴀᴍᴇ:</b> {sc_channel_name}\n"
         f"<b>ɪᴅ:</b> <code>{channel_id}</code>\n\n"
         f"ᴍᴀᴋᴇ sᴜʀᴇ ᴛᴏ ᴀᴅᴅ ᴛʜᴇ ʙᴏᴛ ᴀs ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜɪs ᴄʜᴀɴɴᴇʟ sᴏ ɪᴛ ᴄᴀɴ ᴘᴏsᴛ.</blockquote>"
