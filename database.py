@@ -74,22 +74,40 @@ async def init_marvel_list(marvel_data: list):
     return inserted
 
 async def save_movie_files(watch_order: int, new_files: list, audio: str = None, release: str = None):
-    update_data = {"status": "Available"}
-    if audio: update_data["audio"] = audio
-    if release: update_data["release"] = release
-    
-    for f in new_files:
-        await movies_col.update_one(
-            {"watch_order": watch_order},
-            {"$pull": {"files": {"quality": f["quality"]}}}
-        )
-        await movies_col.update_one(
-            {"watch_order": watch_order},
-            {
-                "$push": {"files": f},
-                "$set": update_data
-            }
-        )
+    movie = await movies_col.find_one({"watch_order": watch_order})
+    existing_files = movie.get("files", []) if movie else []
+
+    # Map existing files by quality, then merge/overwrite with newly uploaded files
+    files_by_quality = {}
+    for idx, f in enumerate(existing_files):
+        q_key = f.get("quality") or f"File_{idx + 1}"
+        files_by_quality[q_key] = f
+
+    for idx, f in enumerate(new_files):
+        q_key = f.get("quality") or f"NewFile_{idx + 1}"
+        files_by_quality[q_key] = f
+
+    # Sort qualities cleanly from lowest to highest resolution
+    quality_order = {"480p": 1, "540p": 2, "720p": 3, "1080p": 4, "1440p": 5, "2160p": 6, "4K": 6}
+    merged_files = sorted(
+        files_by_quality.values(),
+        key=lambda x: quality_order.get(x.get("quality", ""), 99)
+    )
+
+    update_data = {
+        "status": "Available",
+        "files": merged_files
+    }
+    if audio:
+        update_data["audio"] = audio
+    if release:
+        update_data["release"] = release
+
+    await movies_col.update_one(
+        {"watch_order": watch_order},
+        {"$set": update_data},
+        upsert=True
+    )
 
 async def get_movie_by_order(watch_order: int):
     return await movies_col.find_one({"watch_order": watch_order})
