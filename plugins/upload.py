@@ -25,11 +25,8 @@ async def handle_media(client: Client, message: Message):
     raw_file_name = getattr(doc, "file_name", "") or ""
     caption_text = message.caption or ""
     
-    # Combine filename and caption so resolution/audio tags in captions are never missed
     combined_meta_text = f"{raw_file_name} {caption_text}".strip()
     file_size = getattr(doc, "file_size", 0) or 0
-    
-    # Also grab native video dimensions in case filename/caption has no resolution tag
     vid_height = getattr(doc, "height", 0) or 0
     vid_width = getattr(doc, "width", 0) or 0
 
@@ -40,26 +37,30 @@ async def handle_media(client: Client, message: Message):
         user_state["audio"] = info["audio"]
         user_state["release"] = info["release"]
     else:
-        # Upgrade audio to Dual if Hindi is found in a later file
         if "Hindi" in info["audio"] and "Hindi" not in user_state["audio"]:
             user_state["audio"] = "English + Hindi"
 
     dump_msg = await message.forward(Config.DUMP_CHANNEL_ID)
     secure_file_id = dump_msg.document.file_id if dump_msg.document else dump_msg.video.file_id
 
-    # If the same quality already exists in the current upload batch, replace it or keep distinct
-    existing_idx = next((i for i, f in enumerate(user_state["files"]) if f["quality"] == info["quality"]), None)
-    new_file_obj = {
-        "quality": info["quality"],
+    # Keep all files: if another file in the batch has the exact same quality label, make it unique
+    base_q = info["quality"]
+    final_q = base_q
+    existing_qualities = {f["quality"] for f in user_state["files"]}
+    
+    if final_q in existing_qualities:
+        # If the first one was plain "1080p" and this second one is smaller, or vice versa, keep them distinct
+        counter = 2
+        while f"{base_q} #{counter}" in existing_qualities:
+            counter += 1
+        final_q = f"{base_q} #{counter}"
+
+    user_state["files"].append({
+        "quality": final_q,
         "file_id": secure_file_id,
         "mediafire_link": None,
         "file_size": info["size"]
-    }
-    
-    if existing_idx is not None:
-        user_state["files"][existing_idx] = new_file_obj
-    else:
-        user_state["files"].append(new_file_obj)
+    })
 
     sc_title = to_small_caps(f"{user_state['title']} {user_state['release']}")
     count = len(user_state["files"])
@@ -134,11 +135,9 @@ async def handle_mediafire_links(client: Client, message: Message):
         )
         await message.reply_text(text)
     else:
-        # Generate Final Preview but DO NOT save yet
         order = user_state["watch_order"]
         db_movie = await get_movie_by_order(order)
         
-        # Merge temporary state into the db_movie dict for accurate preview rendering
         db_movie["files"] = user_state["files"]
         db_movie["audio"] = user_state["audio"]
         db_movie["release"] = user_state["release"]
@@ -146,7 +145,6 @@ async def handle_mediafire_links(client: Client, message: Message):
         caption = format_movie_post(db_movie)
         poster_url = db_movie.get("images", {}).get("poster_url", "")
         
-        # Show Save to Database Button
         buttons = [
             [InlineKeyboardButton(to_small_caps("💾 sᴀᴠᴇ ᴛᴏ ᴅᴀᴛᴀʙᴀsᴇ"), callback_data=f"save_db_{order}")],
             [InlineKeyboardButton("✘ ᴄᴀɴᴄᴇʟ", callback_data="cancel_upload")]
@@ -165,7 +163,6 @@ async def save_to_database(client: Client, query: CallbackQuery):
     if not user_state:
         return await query.answer("sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ.", show_alert=True)
     
-    # NOW we officially execute the MongoDB save function
     await save_movie_files(
         user_state["watch_order"], 
         user_state["files"], 
@@ -183,7 +180,6 @@ async def save_to_database(client: Client, query: CallbackQuery):
     )
     await client.send_message(query.message.chat.id, success_text)
     
-    # Clean up memory state
     del UPLOAD_STATE[query.from_user.id]
 
 @Client.on_callback_query(filters.regex("^cancel_upload$"))
