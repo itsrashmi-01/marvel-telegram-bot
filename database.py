@@ -47,7 +47,6 @@ async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
         print(f"TMDB Fetch Error for {title}: {e}")
     return {}
 
-# Removed bot_username parameter since we no longer hardcode links here
 async def init_marvel_list(marvel_data: list):
     inserted = 0
     async with aiohttp.ClientSession() as session:
@@ -67,32 +66,44 @@ async def init_marvel_list(marvel_data: list):
                     "genres": tmdb_data.get("genres", ["Action", "Sci-Fi", "Adventure"]),
                     "images": tmdb_data.get("images", {"poster_url": "", "backdrop_url": ""}),
                     "status": "Pending",
-                    "files": [] # file_id and sizes will live exclusively in here
+                    "files": []
                 }
                 await movies_col.insert_one(doc)
                 inserted += 1
     return inserted
 
+def _quality_sort_key(file_obj: dict):
+    """Sorts by base resolution (480p -> 720p -> 1080p -> 2160p), then standard before 10bit/HEVC."""
+    q_str = (file_obj.get("quality") or "").lower()
+    res_order = 99
+    if "480p" in q_str: res_order = 1
+    elif "540p" in q_str: res_order = 2
+    elif "720p" in q_str: res_order = 3
+    elif "1080p" in q_str: res_order = 4
+    elif "1440p" in q_str: res_order = 5
+    elif "2160p" in q_str or "4k" in q_str: res_order = 6
+
+    # Standard encode comes first (0), then 10bit/HEVC variants (1), then numbered duplicates
+    variant_order = 1 if ("10bit" in q_str or "hevc" in q_str) else 0
+    return (res_order, variant_order, q_str)
+
 async def save_movie_files(watch_order: int, new_files: list, audio: str = None, release: str = None):
     movie = await movies_col.find_one({"watch_order": watch_order})
     existing_files = movie.get("files", []) if movie else []
 
-    # Map existing files by quality, then merge/overwrite with newly uploaded files
-    files_by_quality = {}
+    # Merge existing files with new files:
+    # - Updates if exact same quality label is re-uploaded in a new session
+    # - Preserves distinct variants like "1080p" and "1080p 10bit" or "1080p #2"
+    files_by_label = {}
     for idx, f in enumerate(existing_files):
-        q_key = f.get("quality") or f"File_{idx + 1}"
-        files_by_quality[q_key] = f
+        label = f.get("quality") or f"File_{idx + 1}"
+        files_by_label[label] = f
 
     for idx, f in enumerate(new_files):
-        q_key = f.get("quality") or f"NewFile_{idx + 1}"
-        files_by_quality[q_key] = f
+        label = f.get("quality") or f"NewFile_{idx + 1}"
+        files_by_label[label] = f
 
-    # Sort qualities cleanly from lowest to highest resolution
-    quality_order = {"480p": 1, "540p": 2, "720p": 3, "1080p": 4, "1440p": 5, "2160p": 6, "4K": 6}
-    merged_files = sorted(
-        files_by_quality.values(),
-        key=lambda x: quality_order.get(x.get("quality", ""), 99)
-    )
+    merged_files = sorted(files_by_label.values(), key=_quality_sort_key)
 
     update_data = {
         "status": "Available",
