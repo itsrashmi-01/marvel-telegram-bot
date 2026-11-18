@@ -43,7 +43,7 @@ RAW_MARVEL_LIST = [
     {"order": 36, "saga_rank": 36, "saga": "MCU + Defenders Saga", "title": "Avengers: Infinity War"},
     {"order": 37, "saga_rank": 37, "saga": "MCU + Defenders Saga", "title": "Avengers: Endgame"},
 
-    # MULTIVERSE SAGA (Ranks 1 - 31)
+    # MULTIVERSE SAGA (Ranks 1 - 32)
     {"order": 38, "saga_rank": 1, "saga": "Multiverse Saga", "title": "Loki - Season 1"},
     {"order": 39, "saga_rank": 2, "saga": "Multiverse Saga", "title": "What If...? - Season 1"},
     {"order": 40, "saga_rank": 3, "saga": "Multiverse Saga", "title": "WandaVision"},
@@ -75,24 +75,25 @@ RAW_MARVEL_LIST = [
     {"order": 66, "saga_rank": 29, "saga": "Multiverse Saga", "title": "Thunderbolts*"},
     {"order": 67, "saga_rank": 30, "saga": "Multiverse Saga", "title": "Daredevil: Born Again - Season 2"},
     {"order": 68, "saga_rank": 31, "saga": "Multiverse Saga", "title": "Spider-Man: Brand New Day"},
+    {"order": 69, "saga_rank": 32, "saga": "Multiverse Saga", "title": "Vision Quest"},
 
     # FANTASTIC FOUR UNIVERSE (Rank 1)
-    {"order": 69, "saga_rank": 1, "saga": "Fantastic Four Universe", "title": "The Fantastic Four: First Steps"},
+    {"order": 70, "saga_rank": 1, "saga": "Fantastic Four Universe", "title": "The Fantastic Four: First Steps"},
 
     # X-MEN / FOX UNIVERSE (Ranks 1 - 13)
-    {"order": 70, "saga_rank": 1, "saga": "X-Men / Fox Universe", "title": "X-Men: First Class"},
-    {"order": 71, "saga_rank": 2, "saga": "X-Men / Fox Universe", "title": "X-Men: Days of Future Past"},
-    {"order": 72, "saga_rank": 3, "saga": "X-Men / Fox Universe", "title": "X-Men: Apocalypse"},
-    {"order": 73, "saga_rank": 4, "saga": "X-Men / Fox Universe", "title": "Dark Phoenix"},
-    {"order": 74, "saga_rank": 5, "saga": "X-Men / Fox Universe", "title": "X-Men"},
-    {"order": 75, "saga_rank": 6, "saga": "X-Men / Fox Universe", "title": "X2: X-Men United"},
-    {"order": 76, "saga_rank": 7, "saga": "X-Men / Fox Universe", "title": "X-Men: The Last Stand"},
-    {"order": 77, "saga_rank": 8, "saga": "X-Men / Fox Universe", "title": "X-Men Origins: Wolverine"},
-    {"order": 78, "saga_rank": 9, "saga": "X-Men / Fox Universe", "title": "The Wolverine"},
-    {"order": 79, "saga_rank": 10, "saga": "X-Men / Fox Universe", "title": "Logan"},
-    {"order": 80, "saga_rank": 11, "saga": "X-Men / Fox Universe", "title": "Deadpool"},
-    {"order": 81, "saga_rank": 12, "saga": "X-Men / Fox Universe", "title": "Deadpool 2"},
-    {"order": 82, "saga_rank": 13, "saga": "X-Men / Fox Universe", "title": "Deadpool & Wolverine"}
+    {"order": 71, "saga_rank": 1, "saga": "X-Men / Fox Universe", "title": "X-Men: First Class"},
+    {"order": 72, "saga_rank": 2, "saga": "X-Men / Fox Universe", "title": "X-Men: Days of Future Past"},
+    {"order": 73, "saga_rank": 3, "saga": "X-Men / Fox Universe", "title": "X-Men: Apocalypse"},
+    {"order": 74, "saga_rank": 4, "saga": "X-Men / Fox Universe", "title": "Dark Phoenix"},
+    {"order": 75, "saga_rank": 5, "saga": "X-Men / Fox Universe", "title": "X-Men"},
+    {"order": 76, "saga_rank": 6, "saga": "X-Men / Fox Universe", "title": "X2: X-Men United"},
+    {"order": 77, "saga_rank": 7, "saga": "X-Men / Fox Universe", "title": "X-Men: The Last Stand"},
+    {"order": 78, "saga_rank": 8, "saga": "X-Men / Fox Universe", "title": "X-Men Origins: Wolverine"},
+    {"order": 79, "saga_rank": 9, "saga": "X-Men / Fox Universe", "title": "The Wolverine"},
+    {"order": 80, "saga_rank": 10, "saga": "X-Men / Fox Universe", "title": "Logan"},
+    {"order": 81, "saga_rank": 11, "saga": "X-Men / Fox Universe", "title": "Deadpool"},
+    {"order": 82, "saga_rank": 12, "saga": "X-Men / Fox Universe", "title": "Deadpool 2"},
+    {"order": 83, "saga_rank": 13, "saga": "X-Men / Fox Universe", "title": "Deadpool & Wolverine"}
 ]
 
 @Client.on_message(filters.command("list") & filters.private)
