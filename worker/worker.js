@@ -10,11 +10,11 @@ function formatDbSize(val) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
   const str = String(val).trim();
-  if (str.toLowerCase() === "available" || str === "unknown size") return "";
+  if (str.toLowerCase() === "available" || str.toLowerCase() === "unknown size") return "";
   return str;
 }
 
-// Helper: Normalizes quality labels from DB (e.g., "720" -> "720p")
+// Helper: Normalizes quality labels from DB (e.g., "720" -> "720p", keeps "1080p 10bit HEVC" intact)
 function formatDbQuality(q, fallback = "HD") {
   if (!q) return fallback;
   const str = String(q).trim();
@@ -24,13 +24,16 @@ function formatDbQuality(q, fallback = "HD") {
 
 // Helper: Parses files from your backend response structure
 function parseFiles(movieData) {
+  const order = movieData.watch_order || movieData.id || "";
+
   if (Array.isArray(movieData.files) && movieData.files.length > 0) {
     return movieData.files.map((f, idx) => ({
       index: idx,
       quality: formatDbQuality(f.quality || f.res || f.resolution || f.label, `File ${idx + 1}`),
       size: formatDbSize(f.size ?? f.file_size ?? f.size_str ?? f.fileSize ?? f.filesize ?? ""),
       mediafire_link: f.mediafire_link || f.direct_link || f.url || f.link || "",
-      telegram_link: f.telegram_link || f.tg_link || f.bot_link || ""
+      telegram_link: f.telegram_link || f.tg_link || f.bot_link || "",
+      order: order
     }));
   }
 
@@ -46,7 +49,8 @@ function parseFiles(movieData) {
           quality: qKey,
           size: formatDbSize(entry.size || entry.file_size || movieData[`size_${qKey}`] || ""),
           mediafire_link: entry.mediafire_link || entry.direct_link || entry.url || "",
-          telegram_link: entry.telegram_link || entry.tg_link || ""
+          telegram_link: entry.telegram_link || entry.tg_link || "",
+          order: order
         });
       } else if (typeof entry === "string") {
         extracted.push({
@@ -54,7 +58,8 @@ function parseFiles(movieData) {
           quality: qKey,
           size: formatDbSize(movieData[`size_${qKey}`] || movieData.size || ""),
           mediafire_link: entry,
-          telegram_link: movieData[`tg_${qKey}`] || ""
+          telegram_link: movieData[`tg_${qKey}`] || "",
+          order: order
         });
       }
     }
@@ -176,9 +181,15 @@ export default {
 
       // 5. ROUTE ACTIONS SECURELY
       if (action === "meta") {
+        const releaseYear = movieData.release_year || movieData.year || "";
+        const audioLang = (movieData.audio && movieData.audio !== "Pending...") ? movieData.audio : (movieData.language || "");
+
         const safeData = {
           title: movieData.title || movieData.name || "Movie Download",
-          language: movieData.audio || "",
+          year: releaseYear !== "N/A" ? releaseYear : "",
+          release_year: releaseYear !== "N/A" ? releaseYear : "",
+          language: audioLang,
+          release: movieData.release || "",
           files: parsedFiles.map(f => ({
               quality: f.quality,
               size: f.size
@@ -192,18 +203,28 @@ export default {
       
       else if (action === "get_link") {
         if (!parsedFiles.length) {
-            return new Response(JSON.stringify({ error: "No files available for this movie." }), { status: 404, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "No files available for this movie." }), { 
+                status: 404, 
+                headers: { "Content-Type": "application/json", ...corsHeaders } 
+            });
         }
         
-        const file = parsedFiles.find(f => f.quality.toLowerCase() === String(quality).toLowerCase());
+        const targetQuality = String(quality || "").trim().toLowerCase();
+        const file = parsedFiles.find(f => f.quality.toLowerCase() === targetQuality);
         if (!file) {
-            return new Response(JSON.stringify({ error: "Requested quality not found." }), { status: 404, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "Requested quality not found." }), { 
+                status: 404, 
+                headers: { "Content-Type": "application/json", ...corsHeaders } 
+            });
         }
         
         if (type === "telegram") {
             const tgUrl = file.telegram_link;
             if (!tgUrl) {
-                return new Response(JSON.stringify({ error: "Telegram link is missing." }), { status: 404, headers: corsHeaders });
+                return new Response(JSON.stringify({ error: "Telegram link is missing." }), { 
+                    status: 404, 
+                    headers: { "Content-Type": "application/json", ...corsHeaders } 
+                });
             }
             return new Response(JSON.stringify({ url: tgUrl }), { 
                 status: 200, 
@@ -212,7 +233,10 @@ export default {
         } else {
             const rawMfUrl = file.mediafire_link;
             if (!rawMfUrl) {
-                return new Response(JSON.stringify({ error: "Direct download link is missing." }), { status: 404, headers: corsHeaders });
+                return new Response(JSON.stringify({ error: "Direct download link is missing." }), { 
+                    status: 404, 
+                    headers: { "Content-Type": "application/json", ...corsHeaders } 
+                });
             }
             
             // Resolve MediaFire web link to a direct binary stream so browser downloads on same page
@@ -224,10 +248,16 @@ export default {
         }
       }
 
-      return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Invalid Action" }), { 
+          status: 400, 
+          headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
 
     } catch (error) {
-      return new Response(JSON.stringify({ error: `Server Error: ${error.message}` }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: `Server Error: ${error.message}` }), { 
+          status: 500, 
+          headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
     }
   }
 };
