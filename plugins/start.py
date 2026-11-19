@@ -16,6 +16,17 @@ SAGA_CATEGORIES = {
     "xmen": "X-Men / Fox Universe"
 }
 
+
+def _has_file_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(to_small_caps("✅ ʏᴇs, ɪ ʜᴀᴠᴇ ғɪʟᴇ"), callback_data="has_file_yes"),
+            InlineKeyboardButton(to_small_caps("⏭️ ɴᴏ, sᴋɪᴘ ғɪʟᴇ"), callback_data="has_file_no")
+        ],
+        [InlineKeyboardButton(to_small_caps("✘ ᴄᴀɴᴄᴇʟ ᴜᴘʟᴏᴀᴅ"), callback_data="cancel_upload")]
+    ])
+
+
 @Client.on_message(filters.command("start") & filters.private)
 async def start_handler(client: Client, message: Message):
     is_admin = (message.from_user.id == Config.ADMIN_ID)
@@ -38,6 +49,7 @@ async def start_handler(client: Client, message: Message):
     )
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons) if buttons else None)
 
+
 @Client.on_callback_query(filters.regex("^main_menu$"))
 async def return_main_menu(client: Client, query: CallbackQuery):
     buttons = [
@@ -58,21 +70,29 @@ async def return_main_menu(client: Client, query: CallbackQuery):
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        try: await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-        except MessageNotModified: pass
+        try:
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            pass
+
 
 @Client.on_callback_query(filters.regex("^settings_menu$"))
 async def settings_menu_handler(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
+    if query.from_user.id != Config.ADMIN_ID:
+        return
     buttons = [[InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")]]
     text = "<blockquote>⚙️ <b>sᴇᴛᴛɪɴɢs</b>\n\nғᴜᴛᴜʀᴇ ᴄᴏɴғɪɢᴜʀᴀᴛɪᴏɴs ᴀɴᴅ ᴏᴘᴛɪᴏɴs ᴡɪʟʟ ᴀᴘᴘᴇᴀʀ ʜᴇʀᴇ.</blockquote>"
-    try: await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-    except MessageNotModified: pass
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    except MessageNotModified:
+        pass
+
 
 # --- UPLOAD MENU ---
 @Client.on_callback_query(filters.regex("^upload_menu$"))
 async def upload_menu_selection(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
+    if query.from_user.id != Config.ADMIN_ID:
+        return
     buttons = []
     for code, full_name in SAGA_CATEGORIES.items():
         buttons.append([InlineKeyboardButton(to_small_caps(f"📂 {full_name}"), callback_data=f"saga_{code}_1")])
@@ -83,12 +103,16 @@ async def upload_menu_selection(client: Client, query: CallbackQuery):
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        try: await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-        except MessageNotModified: pass
+        try:
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            pass
+
 
 @Client.on_callback_query(filters.regex(r"^saga_(.+)_(\d+)$"))
 async def saga_pagination(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
+    if query.from_user.id != Config.ADMIN_ID:
+        return
     code = query.data.split("_")[1]
     page = int(query.data.split("_")[2])
     full_saga_name = SAGA_CATEGORIES.get(code)
@@ -111,9 +135,12 @@ async def saga_pagination(client: Client, query: CallbackQuery):
         buttons.append([InlineKeyboardButton(btn_text, callback_data=f"init_upload_{item['order']}")])
         
     nav = []
-    if page > 1: nav.append(InlineKeyboardButton(to_small_caps("⬅️ ᴘʀᴇᴠ"), callback_data=f"saga_{code}_{page-1}"))
-    if page < total_pages: nav.append(InlineKeyboardButton(to_small_caps("ɴᴇxᴛ ➡️"), callback_data=f"saga_{code}_{page+1}"))
-    if nav: buttons.append(nav)
+    if page > 1:
+        nav.append(InlineKeyboardButton(to_small_caps("⬅️ ᴘʀᴇᴠ"), callback_data=f"saga_{code}_{page-1}"))
+    if page < total_pages:
+        nav.append(InlineKeyboardButton(to_small_caps("ɴᴇxᴛ ➡️"), callback_data=f"saga_{code}_{page+1}"))
+    if nav:
+        buttons.append(nav)
     buttons.append([InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ sᴀɢs"), callback_data="upload_menu")])
 
     sc_saga_name = to_small_caps(full_saga_name)
@@ -126,11 +153,16 @@ async def saga_pagination(client: Client, query: CallbackQuery):
         await query.message.delete()
         await client.send_message(query.message.chat.id, text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        try: await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-        except MessageNotModified: pass
+        try:
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            pass
+
 
 @Client.on_callback_query(filters.regex(r"^init_upload_(\d+)$"))
 async def init_upload(client: Client, query: CallbackQuery):
+    if query.from_user.id != Config.ADMIN_ID:
+        return
     order = int(query.data.split("_")[2])
     raw_movie = next((m for m in RAW_MARVEL_LIST if m["order"] == order), None)
     
@@ -138,29 +170,38 @@ async def init_upload(client: Client, query: CallbackQuery):
         movie = await get_movie_by_order(order)
         if not movie:
             await query.answer(to_small_caps("ғᴇᴛᴄʜɪɴɢ ᴛᴍᴅʙ ᴍᴇᴛᴀᴅᴀᴛᴀ... ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ."), show_alert=False)
-            # Removed the broken 'bot_username' requirement
             await init_marvel_list([raw_movie])
         else:
-            # Tell Telegram the click was successful so the button stops spinning
             await query.answer()
             
-        UPLOAD_STATE[query.from_user.id] = {"watch_order": order, "title": raw_movie["title"]}
+        UPLOAD_STATE[query.from_user.id] = {
+            "watch_order": order,
+            "title": raw_movie["title"],
+            "files": [],
+            "status": "ask_has_file"
+        }
         sc_title = to_small_caps(raw_movie["title"])
         text = (
-            f"<blockquote>🎬 <b>ʀᴇᴀᴅʏ ᴛᴏ ʀᴇᴄᴇɪᴠᴇ ғɪʟᴇs ғᴏʀ:</b> {sc_title}\n\n"
-            f"👇 <b>ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴏʀ ᴜᴘʟᴏᴀᴅ ᴛʜᴇ ᴠɪᴅᴇᴏ ғɪʟᴇs ɴᴏᴡ.</b>\n"
-            f"(ʏᴏᴜ ᴄᴀɴ sᴇɴᴅ ᴍᴜʟᴛɪᴘʟᴇ ғɪʟᴇs ᴏɴᴇ ᴀғᴛᴇʀ ᴛʜᴇ ᴏᴛʜᴇʀ.)</blockquote>"
+            f"<blockquote>🎬 <b>{sc_title}</b> (#{order})\n\n"
+            f"ᴅᴏ ʏᴏᴜ ʜᴀᴠᴇ <b>ᴠɪᴅᴇᴏ / ᴅᴏᴄᴜᴍᴇɴᴛ ғɪʟᴇs</b> ᴛᴏ ᴜᴘʟᴏᴀᴅ?</blockquote>"
         )
         await query.message.delete()
-        await client.send_message(chat_id=query.message.chat.id, text=text)
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=_has_file_keyboard()
+        )
     else:
-        await query.answer("ᴇʀʀᴏʀ ɪɴɪᴛɪᴀᴛɪɴɢ ᴜᴘʟᴏᴀᴅ.", show_alert=True)
+        await query.answer(to_small_caps("ᴇʀʀᴏʀ ɪɴɪᴛɪᴀᴛɪɴɢ ᴜᴘʟᴏᴀᴅ."), show_alert=True)
+
 
 # --- CHANNEL MANAGEMENT UI ---
 @Client.on_callback_query(filters.regex("^manage_channel$"))
 async def channel_manager_menu(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
-    if query.from_user.id in WAITING_FOR_CHANNEL: del WAITING_FOR_CHANNEL[query.from_user.id]
+    if query.from_user.id != Config.ADMIN_ID:
+        return
+    if query.from_user.id in WAITING_FOR_CHANNEL:
+        del WAITING_FOR_CHANNEL[query.from_user.id]
     
     channels = await get_target_channels()
     buttons = []
@@ -182,20 +223,26 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
         f"<b>ʟɪɴᴋᴇᴅ ᴄʜᴀɴɴᴇʟs:</b>\n{channel_text}\n"
         f"ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜᴇ ʙᴏᴛ ɪs ᴀᴅᴅᴇᴅ ᴀs ᴀɴ <b>ᴀᴅᴍɪɴ</b> ɪɴ ᴀʟʟ ᴄʜᴀɴɴᴇʟs!</blockquote>"
     )
-    try: await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-    except MessageNotModified: pass
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    except MessageNotModified:
+        pass
+
 
 @Client.on_callback_query(filters.regex(r"^del_chan_(-?\d+)$"))
 async def delete_channel(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
+    if query.from_user.id != Config.ADMIN_ID:
+        return
     chan_id = int(query.data.split("_")[2])
     await remove_target_channel(chan_id)
     await query.answer(to_small_caps("ᴄʜᴀɴɴᴇʟ ᴅᴇʟᴇᴛᴇᴅ!"), show_alert=True)
     await channel_manager_menu(client, query)
 
+
 @Client.on_callback_query(filters.regex("^set_new_channel$"))
 async def ask_for_channel(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID: return
+    if query.from_user.id != Config.ADMIN_ID:
+        return
     WAITING_FOR_CHANNEL[query.from_user.id] = True
     buttons = [[InlineKeyboardButton(to_small_caps("✘ ᴄᴀɴᴄᴇʟ"), callback_data="manage_channel")]]
     text = (
@@ -204,8 +251,11 @@ async def ask_for_channel(client: Client, query: CallbackQuery):
         "𝟸. ғᴏʀᴡᴀʀᴅ ᴀɴʏ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ᴛʜᴀᴛ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴍᴇ ʀɪɢʜᴛ ɴᴏᴡ.\n"
         "(ᴏʀ, ʏᴏᴜ ᴄᴀɴ ᴊᴜsᴛ ᴛʏᴘᴇ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ɪᴅ ɪғ ʏᴏᴜ ᴋɴᴏᴡ ɪᴛ, ᴇ.ɢ., -𝟷𝟶𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿)</blockquote>"
     )
-    try: await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-    except MessageNotModified: pass
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    except MessageNotModified:
+        pass
+
 
 @Client.on_message(filters.private & filters.user(Config.ADMIN_ID))
 async def capture_channel_input(client: Client, message: Message):
@@ -217,7 +267,8 @@ async def capture_channel_input(client: Client, message: Message):
     if message.forward_from_chat and message.forward_from_chat.type.name == "CHANNEL":
         channel_id = message.forward_from_chat.id
     else:
-        try: channel_id = int(message.text)
+        try:
+            channel_id = int(message.text)
         except (ValueError, TypeError):
             return await message.reply_text("<blockquote>✘ ɪɴᴠᴀʟɪᴅ ɪɴᴘᴜᴛ. ᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ᴏʀ sᴇɴᴅ ᴀ -𝟷𝟶𝟶 ɪᴅ.</blockquote>")
             
