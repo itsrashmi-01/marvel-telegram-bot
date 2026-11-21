@@ -1,5 +1,7 @@
 from hydrogram import Client, filters
-from hydrogram.types import Message
+from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pymongo import UpdateOne
+from config import Config
 from database import movies_col
 
 # --- RAW MARVEL LIST WITH SAGA LABELS & SAGA RANKS ---
@@ -96,24 +98,130 @@ RAW_MARVEL_LIST = [
     {"order": 83, "saga_rank": 13, "saga": "X-Men / Fox Universe", "title": "Deadpool & Wolverine"}
 ]
 
+
+def _normalize_list_ranks(raw_list: list) -> list:
+    """Recomputes sequential order (1..N) and per-saga rank (1..M) so inserting items stays accurate."""
+    normalized = []
+    saga_counters = {}
+    for idx, entry in enumerate(raw_list, start=1):
+        saga = entry["saga"]
+        saga_counters[saga] = saga_counters.get(saga, 0) + 1
+        normalized.append({
+            "order": idx,
+            "saga_rank": saga_counters[saga],
+            "saga": saga,
+            "title": entry["title"]
+        })
+    return normalized
+
+
+async def sync_watch_order_to_db() -> dict:
+    """
+    Syncs RAW_MARVEL_LIST positions to MongoDB without losing uploaded files/metadata.
+    Matches existing documents by `title` first, or falls back to `watch_order`.
+    """
+    synced_items = _normalize_list_ranks(RAW_MARVEL_LIST)
+    operations = []
+    inserted_count = 0
+    updated_count = 0
+
+    for item in synced_items:
+        existing_by_title = await movies_col.find_one({"title": item["title"]})
+        if existing_by_title:
+            operations.append(
+                UpdateOne(
+                    {"_id": existing_by_title["_id"]},
+                    {
+                        "$set": {
+                            "watch_order": item["order"],
+                            "saga_rank": item["saga_rank"],
+                            "saga": item["saga"],
+                            "title": item["title"]
+                        }
+                    }
+                )
+            )
+            updated_count += 1
+        else:
+            operations.append(
+                UpdateOne(
+                    {"watch_order": item["order"]},
+                    {
+                        "$set": {
+                            "watch_order": item["order"],
+                            "saga_rank": item["saga_rank"],
+                            "saga": item["saga"],
+                            "title": item["title"]
+                        },
+                        "$setOnInsert": {
+                            "files": [],
+                            "audio": "Pending...",
+                            "release": "N/A"
+                        }
+                    },
+                    upsert=True
+                )
+            )
+            inserted_count += 1
+
+    if operations:
+        await movies_col.bulk_write(operations, ordered=False)
+
+    return {
+        "total": len(synced_items),
+        "updated": updated_count,
+        "upserted": inserted_count
+    }
+
+
+@Client.on_message(filters.command("sync_order") & filters.private)
+async def sync_order_command(client: Client, message: Message):
+    if hasattr(Config, "ADMIN_ID") and message.from_user.id != Config.ADMIN_ID:
+        return
+    wait_msg = await message.reply_text("🔄 Syncing watch order numbers with MongoDB...")
+    stats = await sync_watch_order_to_db()
+    await wait_msg.edit_text(
+        f"✅ **Watch Order Synced!**\n\n"
+        f"• Total Titles: `{stats['total']}`\n"
+        f"• Updated Existing: `{stats['updated']}`\n"
+        f"• Added / Upserted: `{stats['upserted']}`"
+    )
+
+
+@Client.on_callback_query(filters.regex("^sync_watch_order$"))
+async def sync_order_callback(client: Client, query: CallbackQuery):
+    if hasattr(Config, "ADMIN_ID") and query.from_user.id != Config.ADMIN_ID:
+        return
+    await query.answer("Syncing watch order...", show_alert=False)
+    stats = await sync_watch_order_to_db()
+    await query.message.reply_text(
+        f"✅ **Watch Order Synced!** (`{stats['total']}` titles updated in DB)"
+    )
+
+
 @Client.on_message(filters.command("list") & filters.private)
 async def list_movies(client: Client, message: Message):
     status_msg = await message.reply_text("⏳ Checking upload status from MongoDB...")
-    
+
+    # Automatically keep DB watch_order numbers aligned with RAW_MARVEL_LIST
+    await sync_watch_order_to_db()
+
+    synced_items = _normalize_list_ranks(RAW_MARVEL_LIST)
+
     # Query uploaded items
     uploaded_movies = await movies_col.find(
         {"files": {"$exists": True, "$not": {"$size": 0}}},
-        {"watch_order": 1}
-    ).to_list(length=200)
-    
-    uploaded_set = {doc["watch_order"] for doc in uploaded_movies}
-    
+        {"watch_order": 1, "title": 1}
+    ).to_list(length=300)
+
+    uploaded_orders = {doc.get("watch_order") for doc in uploaded_movies if doc.get("watch_order") is not None}
+    uploaded_titles = {doc.get("title") for doc in uploaded_movies if doc.get("title")}
+
     output = "🎬 **MARVEL COMPLETE WATCH ORDER**\n"
     output += "✔ = Available | ✘ = Pending Upload\n\n"
-    
+
     current_saga = ""
-    for item in RAW_MARVEL_LIST:
-        # Print a header when the saga changes
+    for item in synced_items:
         if item["saga"] != current_saga:
             current_saga = item["saga"]
             output += f"\n📂 **{current_saga.upper()}**\n"
@@ -121,19 +229,21 @@ async def list_movies(client: Client, message: Message):
         order = item["order"]
         saga_rank = item["saga_rank"]
         title = item["title"]
-        
-        # Use saga_rank for the list numbering instead of the global order
-        if order in uploaded_set:
-            output += f"✔ `{saga_rank}.` {title}\n"
-        else:
-            output += f"✘ `{saga_rank}.` {title}\n"
+
+        is_available = (order in uploaded_orders) or (title in uploaded_titles)
+        mark = "✔" if is_available else "✘"
+        output += f"{mark} `{saga_rank}.` {title}\n"
 
     await status_msg.delete()
 
-    # Split message into chunks to comply with Telegram's limit
+    sync_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Sync Watch Order Now", callback_data="sync_watch_order")]
+    ])
+
     if len(output) > 4096:
-        chunks = [output[i:i+4000] for i in range(0, len(output), 4000)]
-        for chunk in chunks:
-            await message.reply_text(chunk)
+        chunks = [output[i:i + 4000] for i in range(0, len(output), 4000)]
+        for idx, chunk in enumerate(chunks):
+            reply_markup = sync_btn if idx == len(chunks) - 1 else None
+            await message.reply_text(chunk, reply_markup=reply_markup)
     else:
-        await message.reply_text(output)
+        await message.reply_text(output, reply_markup=sync_btn)
