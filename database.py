@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 import aiohttp
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import Config
@@ -9,6 +10,7 @@ db = db_client["marvel_db"]
 movies_col = db["movies"]
 movies_collection = db["movies"]
 settings_col = db["settings"]
+products_col = db["products"]
 
 GENRE_MAP = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -18,7 +20,7 @@ GENRE_MAP = {
 async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
     tmdb_key = getattr(Config, "TMDB_API_KEY", "")
     if not tmdb_key: return {}
-    
+
     clean_title = re.sub(r'\s*\(\d{4}\)', '', title).strip()
     clean_title = re.sub(r'\s*-?\s*Season \d+', '', clean_title).strip()
     url = f"https://api.themoviedb.org/3/search/multi?api_key={tmdb_key}&query={clean_title}"
@@ -31,7 +33,7 @@ async def fetch_tmdb_meta(session: aiohttp.ClientSession, title: str):
                 poster_path = top.get("poster_path")
                 backdrop_path = top.get("backdrop_path")
                 genres = [GENRE_MAP.get(gid) for gid in top.get("genre_ids", []) if gid in GENRE_MAP]
-                
+
                 release_date = top.get("release_date") or top.get("first_air_date") or ""
                 release_year = release_date[:4] if release_date else "N/A"
 
@@ -54,7 +56,7 @@ async def init_marvel_list(marvel_data: list):
             existing = await movies_col.find_one({"watch_order": item["order"]})
             if not existing:
                 tmdb_data = await fetch_tmdb_meta(session, item["title"])
-                
+
                 doc = {
                     "watch_order": item["order"],
                     "title": item["title"],
@@ -91,9 +93,6 @@ async def save_movie_files(watch_order: int, new_files: list, audio: str = None,
     movie = await movies_col.find_one({"watch_order": watch_order})
     existing_files = movie.get("files", []) if movie else []
 
-    # Merge existing files with new files:
-    # - Updates if exact same quality label is re-uploaded in a new session
-    # - Preserves distinct variants like "1080p" and "1080p 10bit" or "1080p #2"
     files_by_label = {}
     for idx, f in enumerate(existing_files):
         label = f.get("quality") or f"File_{idx + 1}"
@@ -144,3 +143,58 @@ async def remove_target_channel(channel_id: int):
         {"_id": "bot_settings"},
         {"$pull": {"channels": {"id": channel_id}}}
     )
+
+# --- PRODUCTS DATABASE FUNCTIONS ---
+async def save_product_item(product_doc: dict) -> dict:
+    doc = {
+        "title": product_doc.get("title", "Marvel Product"),
+        "image": product_doc.get("image", ""),
+        "price": product_doc.get("price", ""),
+        "platform": product_doc.get("platform", "Store"),
+        "category": (product_doc.get("category") or "General").strip(),
+        "source_url": product_doc.get("source_url", ""),
+        "url": product_doc.get("url") or product_doc.get("source_url") or "#",
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await products_col.insert_one(doc)
+    return {
+        "id": str(result.inserted_id),
+        "title": doc["title"],
+        "image": doc["image"],
+        "price": doc["price"],
+        "platform": doc["platform"],
+        "category": doc["category"],
+        "source_url": doc["source_url"],
+        "url": doc["url"],
+        "created_at": doc["created_at"].isoformat(),
+    }
+
+async def get_all_products() -> list:
+    cursor = products_col.find({}).sort("created_at", -1)
+    docs = await cursor.to_list(length=500)
+    return [
+        {
+            "id": str(row["_id"]),
+            "title": row.get("title", "Marvel Product"),
+            "image": row.get("image", ""),
+            "price": row.get("price", ""),
+            "platform": row.get("platform", "Store"),
+            "category": (row.get("category") or "General").strip(),
+            "source_url": row.get("source_url", ""),
+            "url": row.get("url") or row.get("source_url") or "#",
+        }
+        for row in docs
+    ]
+
+async def get_products_grouped_by_category() -> dict:
+    items = await get_all_products()
+    grouped = {}
+    for item in items:
+        cat = item["category"]
+        grouped.setdefault(cat, []).append(item)
+
+    categories = [
+        {"name": cat, "count": len(list_items), "items": list_items}
+        for cat, list_items in grouped.items()
+    ]
+    return {"categories": categories, "products": items}
