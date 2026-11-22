@@ -7,6 +7,13 @@ const CORS_HEADERS = {
 
 const FALLBACK_IMAGE = "https://ik.imagekit.io/itsrashmi/Marvel%20Sticker/Avengers.webp";
 
+function jsonRes(data, status = 200) {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: CORS_HEADERS
+    });
+}
+
 function parseProductsModuleSource(jsSource) {
     const match = jsSource.match(/(?:export\s+)?(?:const|let|var)\s+PRODUCTS\s*=\s*(\[[\s\S]*?\]);/);
     if (!match) {
@@ -124,31 +131,18 @@ function groupByCategory(items) {
     };
 }
 
-async function handleGetProducts(env, ctx) {
+async function handleGetProducts(env) {
     const rawGithubUrl = env.GITHUB_PRODUCTS_RAW_URL;
     if (!rawGithubUrl) {
-        return new Response(JSON.stringify({ error: "GITHUB_PRODUCTS_RAW_URL missing" }), {
-            status: 500,
-            headers: CORS_HEADERS
-        });
-    }
-
-    const cache = caches.default;
-    const cacheKey = new Request(`https://cache.local/ek-products-v4?u=${encodeURIComponent(rawGithubUrl)}`);
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-        return new Response(await cached.text(), { status: 200, headers: CORS_HEADERS });
+        return jsonRes({ error: "GITHUB_PRODUCTS_RAW_URL missing" }, 500);
     }
 
     const ghResp = await fetch(rawGithubUrl, {
         headers: { "User-Agent": "JARVIS-Worker" },
-        cf: { cacheTtl: 180, cacheEverything: true }
+        cf: { cacheTtl: 60, cacheEverything: false }
     });
     if (!ghResp.ok) {
-        return new Response(JSON.stringify({ error: "Failed to load products.js" }), {
-            status: 502,
-            headers: CORS_HEADERS
-        });
+        return jsonRes({ error: `Failed to load products.js (${ghResp.status})` }, 502);
     }
 
     const rawProducts = parseProductsModuleSource(await ghResp.text());
@@ -172,48 +166,29 @@ async function handleGetProducts(env, ctx) {
         })
     );
 
-    const payload = JSON.stringify(groupByCategory(enriched));
-    const cacheResp = new Response(payload, {
-        status: 200,
-        headers: { ...CORS_HEADERS, "Cache-Control": "public, max-age=180" }
-    });
-    if (ctx && ctx.waitUntil) {
-        ctx.waitUntil(cache.put(cacheKey, cacheResp.clone()));
-    }
-
-    return new Response(payload, { status: 200, headers: CORS_HEADERS });
+    return jsonRes(groupByCategory(enriched), 200);
 }
 
 export default {
-    async fetch(request, env, ctx) {
-        if (request.method === "OPTIONS") {
-            return new Response(null, { status: 204, headers: CORS_HEADERS });
-        }
-        if (request.method !== "POST") {
-            return new Response(JSON.stringify({ error: "Method not allowed" }), {
-                status: 405,
-                headers: CORS_HEADERS
-            });
-        }
-
-        let body = {};
+    async fetch(request, env) {
         try {
-            body = await request.json();
-        } catch (_) {
-            return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-                status: 400,
-                headers: CORS_HEADERS
-            });
-        }
+            if (request.method === "OPTIONS") {
+                return new Response(null, { status: 204, headers: CORS_HEADERS });
+            }
+            if (request.method !== "POST") {
+                return jsonRes({ error: "Method not allowed" }, 405);
+            }
 
-        if (body.action === "get_products") {
-            return handleGetProducts(env, ctx);
-        }
+            const body = await request.json();
 
-        // Keep your existing `meta` / `get_link` handlers here
-        return new Response(JSON.stringify({ error: "Unsupported action" }), {
-            status: 400,
-            headers: CORS_HEADERS
-        });
+            if (body.action === "get_products") {
+                return await handleGetProducts(env);
+            }
+
+            // Keep your existing `meta` / `get_link` handlers here
+            return jsonRes({ error: "Unsupported action" }, 400);
+        } catch (err) {
+            return jsonRes({ error: err.message || "Internal error" }, 500);
+        }
     }
 };
