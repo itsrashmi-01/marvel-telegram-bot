@@ -1,13 +1,12 @@
-import os
 import re
 import json
 from html import unescape
+from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
-from datetime import datetime, timezone
 
-import httpx
-from bs4 import BeautifulSoup
-from motor.motor_asyncio import AsyncIOMotorClient
+import aiohttp
+from config import Config
+from database import save_product_item, get_products_grouped_by_category
 
 CATEGORIES = [
     "Collectibles",
@@ -16,14 +15,6 @@ CATEGORIES = [
     "Gadgets",
     "Home & Decor",
 ]
-
-EARNKARO_TOKEN = os.getenv("EARNKARO_TOKEN", "")
-EARNKARO_CONVERTER_URL = os.getenv(
-    "EARNKARO_CONVERTER_URL",
-    "https://ekaro-api.affiliaters.in/api/converter/public",
-)
-MONGO_URI = os.getenv("MONGO_URI", "")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "jarvis_marvel")
 
 FALLBACK_IMAGE = "https://ik.imagekit.io/itsrashmi/Marvel%20Sticker/Avengers.webp"
 
@@ -34,6 +25,58 @@ HEADERS = {
     ),
     "Accept-Language": "en-IN,en;q=0.9",
 }
+
+
+class _PageMetaParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.metas = {}
+        self.json_ld_blocks = []
+        self.title_chunks = []
+        self.text_chunks = []
+        self._in_title = False
+        self._in_json_ld = False
+        self._skip_text = False
+
+    def handle_starttag(self, tag, attrs):
+        t = tag.lower()
+        attr_map = {k.lower(): v for k, v in attrs if v is not None}
+
+        if t == "meta":
+            key = (attr_map.get("property") or attr_map.get("name") or "").strip().lower()
+            content = (attr_map.get("content") or "").strip()
+            if key and content and key not in self.metas:
+                self.metas[key] = content
+        elif t == "title":
+            self._in_title = True
+        elif t == "script":
+            stype = (attr_map.get("type") or "").strip().lower()
+            if "ld+json" in stype:
+                self._in_json_ld = True
+                self.json_ld_blocks.append("")
+            self._skip_text = True
+        elif t in ("style", "noscript"):
+            self._skip_text = True
+
+    def handle_endtag(self, tag):
+        t = tag.lower()
+        if t == "title":
+            self._in_title = False
+        elif t == "script":
+            self._in_json_ld = False
+            self._skip_text = False
+        elif t in ("style", "noscript"):
+            self._skip_text = False
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title_chunks.append(data)
+        if self._in_json_ld:
+            self.json_ld_blocks[-1] = self.json_ld_blocks[-1] + data
+        elif not self._skip_text:
+            stripped = data.strip()
+            if stripped:
+                self.text_chunks.append(stripped)
 
 
 def detect_platform(url: str) -> str:
@@ -63,13 +106,12 @@ def _clean_price(raw_val) -> str:
     return s
 
 
-def _parse_json_ld_product(soup: BeautifulSoup) -> dict:
+def _parse_json_ld_product(blocks: list) -> dict:
     title = ""
     image = ""
     price = ""
 
-    for script in soup.find_all("script", type="application/ld+json"):
-        raw = script.string or script.get_text() or ""
+    for raw in blocks:
         if not raw.strip():
             continue
         try:
@@ -92,7 +134,8 @@ def _parse_json_ld_product(soup: BeautifulSoup) -> dict:
                     img = obj.get("image")
                     if not image and img:
                         if isinstance(img, list) and img:
-                            image = img[0] if isinstance(img[0], str) else img[0].get("url", "")
+                            first = img[0]
+                            image = first if isinstance(first, str) else first.get("url", "")
                         elif isinstance(img, str):
                             image = img
                         elif isinstance(img, dict):
@@ -108,33 +151,33 @@ def _parse_json_ld_product(soup: BeautifulSoup) -> dict:
 
 async def fetch_product_details(url: str) -> dict:
     final_url = url.strip()
-    title = ""
-    image = ""
-    price = ""
+    html = ""
 
-    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=12.0) as client:
-        resp = await client.get(final_url)
-        final_url = str(resp.url)
-        html = resp.text
+    timeout = aiohttp.ClientTimeout(total=12)
+    async with aiohttp.ClientSession(headers=HEADERS, timeout=timeout) as session:
+        async with session.get(final_url, allow_redirects=True) as resp:
+            final_url = str(resp.url)
+            html = await resp.text(errors="replace")
 
-    soup = BeautifulSoup(html, "html.parser")
-    ld = _parse_json_ld_product(soup)
+    parser = _PageMetaParser()
+    parser.feed(html)
 
-    og_title = soup.find("meta", property="og:title") or soup.find("meta", attrs={"name": "twitter:title"})
-    og_image = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
-    og_price = soup.find("meta", property="product:price:amount") or soup.find("meta", property="og:price:amount")
+    ld = _parse_json_ld_product(parser.json_ld_blocks)
+    metas = parser.metas
+
+    og_title = metas.get("og:title") or metas.get("twitter:title") or ""
+    og_image = metas.get("og:image") or metas.get("twitter:image") or ""
+    og_price = metas.get("product:price:amount") or metas.get("og:price:amount") or ""
+    html_title = "".join(parser.title_chunks).strip()
 
     title = (
         ld["title"]
-        or (unescape(og_title["content"]).strip() if og_title and og_title.get("content") else "")
-        or (unescape(soup.title.string).strip() if soup.title and soup.title.string else "")
+        or og_title.strip()
+        or html_title
         or "Marvel Product"
     )
 
-    raw_img = (
-        ld["image"]
-        or (unescape(og_image["content"]).strip() if og_image and og_image.get("content") else "")
-    )
+    raw_img = ld["image"] or og_image.strip()
     if raw_img:
         try:
             image = urljoin(final_url, raw_img)
@@ -143,9 +186,10 @@ async def fetch_product_details(url: str) -> dict:
     else:
         image = FALLBACK_IMAGE
 
-    price = ld["price"] or _clean_price(og_price["content"] if og_price and og_price.get("content") else "")
+    price = ld["price"] or _clean_price(og_price)
     if not price:
-        price_match = re.search(r"₹\s*[\d,]+(?:\.\d{1,2})?", soup.get_text(" ", strip=True))
+        full_text = " ".join(parser.text_chunks)
+        price_match = re.search(r"₹\s*[\d,]+(?:\.\d{1,2})?", full_text)
         if price_match:
             price = _clean_price(price_match.group(0))
 
@@ -159,37 +203,39 @@ async def fetch_product_details(url: str) -> dict:
 
 
 async def convert_earnkaro_link(deal_url: str) -> str:
-    if not EARNKARO_TOKEN or not deal_url:
+    token = getattr(Config, "EARNKARO_TOKEN", "")
+    converter_url = getattr(
+        Config,
+        "EARNKARO_CONVERTER_URL",
+        "https://ekaro-api.affiliaters.in/api/converter/public",
+    )
+    if not token or not deal_url:
         return deal_url
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                EARNKARO_CONVERTER_URL,
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                converter_url,
                 headers={
-                    "Authorization": f"Bearer {EARNKARO_TOKEN}",
+                    "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
                 },
                 json={"deal": deal_url},
-            )
-            data = resp.json()
-            if resp.status_code == 200 and isinstance(data, dict) and data.get("data"):
-                return data["data"]
+            ) as resp:
+                data = await resp.json(content_type=None)
+                if resp.status == 200 and isinstance(data, dict) and data.get("data"):
+                    return data["data"]
     except Exception:
         pass
     return deal_url
 
 
 class ProductRepository:
-    def __init__(self):
-        self.client = AsyncIOMotorClient(MONGO_URI)
-        self.db = self.client[MONGO_DB_NAME]
-        self.col = self.db["products"]
-
     async def save_product(self, raw_link: str, category: str) -> dict:
         details = await fetch_product_details(raw_link)
         profit_url = await convert_earnkaro_link(details["source_url"])
 
-        doc = {
+        return await save_product_item({
             "title": details["title"],
             "image": details["image"],
             "price": details["price"],
@@ -197,37 +243,7 @@ class ProductRepository:
             "category": category,
             "source_url": details["source_url"],
             "url": profit_url,
-            "created_at": datetime.now(timezone.utc),
-        }
-        result = await self.col.insert_one(doc)
-        doc["id"] = str(result.inserted_id)
-        doc.pop("_id", None)
-        doc["created_at"] = doc["created_at"].isoformat()
-        return doc
+        })
 
     async def get_grouped_products(self) -> dict:
-        cursor = self.col.find({}).sort("created_at", -1)
-        items = []
-        async for row in cursor:
-            items.append({
-                "id": str(row["_id"]),
-                "title": row.get("title", "Marvel Product"),
-                "image": row.get("image") or FALLBACK_IMAGE,
-                "price": row.get("price", ""),
-                "platform": row.get("platform", "Store"),
-                "category": row.get("category", "General"),
-                "url": row.get("url") or row.get("source_url") or "#",
-            })
-
-        grouped = {}
-        for item in items:
-            cat = item["category"]
-            grouped.setdefault(cat, []).append(item)
-
-        return {
-            "categories": [
-                {"name": cat, "count": len(list_items), "items": list_items}
-                for cat, list_items in grouped.items()
-            ],
-            "products": items,
-        }
+        return await get_products_grouped_by_category()
