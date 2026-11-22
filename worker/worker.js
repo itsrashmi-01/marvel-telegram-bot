@@ -114,6 +114,7 @@ function groupByCategory(items) {
         map.get(cat).push(item);
     }
     return {
+        categoryList: Array.from(map.keys()),
         categories: Array.from(map.entries()).map(([name, list]) => ({
             name,
             count: list.length,
@@ -133,7 +134,7 @@ async function handleGetProducts(env, ctx) {
     }
 
     const cache = caches.default;
-    const cacheKey = new Request(`https://cache.local/ek-products-v3?u=${encodeURIComponent(rawGithubUrl)}`);
+    const cacheKey = new Request(`https://cache.local/ek-products-v4?u=${encodeURIComponent(rawGithubUrl)}`);
     const cached = await cache.match(cacheKey);
     if (cached) {
         return new Response(await cached.text(), { status: 200, headers: CORS_HEADERS });
@@ -164,7 +165,7 @@ async function handleGetProducts(env, ctx) {
                 id: entry.id || `p-${idx + 1}`,
                 title: entry.title || meta.title,
                 image: entry.image || meta.image || FALLBACK_IMAGE,
-                category: entry.category || "General",
+                category: (entry.category && String(entry.category).trim()) || "General",
                 platform: entry.platform || "Store",
                 url: profitUrl || sourceLink || "#"
             };
