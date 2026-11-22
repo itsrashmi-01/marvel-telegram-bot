@@ -1,6 +1,6 @@
 export const PRODUCTS = [
     {
-        link: "https://www.flipkart.com/",
+        link: "https://dl.flipkart.com/s/Xmx6ijNNNN",
         category: "Collectibles",
         platform: "Flipkart"
     },
