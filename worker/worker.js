@@ -5,8 +5,6 @@ const CORS_HEADERS = {
     "Content-Type": "application/json"
 };
 
-const FALLBACK_IMAGE = "https://ik.imagekit.io/itsrashmi/Marvel%20Sticker/Avengers.webp";
-
 function jsonRes(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
@@ -14,102 +12,65 @@ function jsonRes(data, status = 200) {
     });
 }
 
-function parseProductsModuleSource(jsSource) {
-    const match = jsSource.match(/(?:export\s+)?(?:const|let|var)\s+PRODUCTS\s*=\s*(\[[\s\S]*?\]);/);
-    if (!match) {
-        throw new Error("Could not find PRODUCTS array in products.js");
-    }
-    const list = new Function(`return (${match[1]});`)();
-    if (!Array.isArray(list)) {
-        throw new Error("PRODUCTS is not an array");
-    }
-    return list;
+function getBackendConfig(env) {
+    const baseUrl = (env.RENDER_URL || env.BACKEND_URL || "https://movie-post-bot.onrender.com")
+        .trim()
+        .replace(/\/+$/, "");
+    const secret = (env.SECRET_KEY || env.WORKER_SECRET || "").trim();
+    return { baseUrl, secret };
 }
 
-function decodeHtmlEntities(str) {
-    return str
-        .replace(/&amp;/g, "&")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">");
-}
+async function postToRender(env, path, payload, timeoutMs = 8000) {
+    const { baseUrl, secret } = getBackendConfig(env);
+    if (!baseUrl) {
+        throw new Error("RENDER_URL is missing");
+    }
 
-function extractMetaFromHtml(html, baseUrl) {
-    const getMeta = (pattern) => {
-        const m = html.match(pattern);
-        return m ? decodeHtmlEntities(m[1].trim()) : "";
+    const headers = {
+        "Content-Type": "application/json"
     };
-
-    const ogImage =
-        getMeta(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
-        getMeta(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
-        getMeta(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
-        getMeta(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-
-    const ogTitle =
-        getMeta(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
-        getMeta(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
-
-    const titleTagMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const rawTitle = ogTitle || (titleTagMatch ? decodeHtmlEntities(titleTagMatch[1].trim()) : "");
-
-    let resolvedImage = FALLBACK_IMAGE;
-    if (ogImage) {
-        try {
-            resolvedImage = new URL(ogImage, baseUrl).toString();
-        } catch (_) {
-            resolvedImage = FALLBACK_IMAGE;
-        }
+    if (secret) {
+        headers["X-Worker-Secret"] = secret;
     }
 
-    return {
-        title: rawTitle || "Marvel Deal",
-        image: resolvedImage
-    };
-}
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-async function fetchProductMetadata(productUrl) {
-    if (!productUrl) {
-        return { title: "Marvel Deal", image: FALLBACK_IMAGE };
-    }
     try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 4500);
-        const resp = await fetch(productUrl, {
+        const resp = await fetch(`${baseUrl}${path}`, {
+            method: "POST",
             signal: controller.signal,
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml"
-            },
-            redirect: "follow"
+            headers,
+            body: JSON.stringify(payload)
         });
         clearTimeout(timer);
-        if (!resp.ok) {
-            return { title: "Marvel Deal", image: FALLBACK_IMAGE };
-        }
-        const html = await resp.text();
-        return extractMetaFromHtml(html, resp.url || productUrl);
-    } catch (_) {
-        return { title: "Marvel Deal", image: FALLBACK_IMAGE };
-    }
-}
 
-async function convertWithEarnKaro(env, dealUrl) {
-    if (!env.EARNKARO_TOKEN || !dealUrl) return dealUrl || "#";
-    try {
-        const res = await fetch("https://ekaro-api.affiliaters.in/api/converter/public", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${env.EARNKARO_TOKEN}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ deal: dealUrl })
-        });
-        const data = await res.json();
-        return (res.ok && data && data.data) ? data.data : dealUrl;
-    } catch (_) {
-        return dealUrl;
+        const text = await resp.text();
+        let data = {};
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (_) {
+            data = { raw: text };
+        }
+
+        if (!resp.ok) {
+            return {
+                ok: false,
+                status: resp.status,
+                error: data.error || `Backend returned ${resp.status}`,
+                data
+            };
+        }
+
+        return { ok: true, status: resp.status, data };
+    } catch (err) {
+        clearTimeout(timer);
+        return {
+            ok: false,
+            status: 502,
+            error: err.message || "Failed to reach backend",
+            data: {}
+        };
     }
 }
 
@@ -132,41 +93,68 @@ function groupByCategory(items) {
 }
 
 async function handleGetProducts(env) {
-    const rawGithubUrl = env.GITHUB_PRODUCTS_RAW_URL;
-    if (!rawGithubUrl) {
-        return jsonRes({ error: "GITHUB_PRODUCTS_RAW_URL missing" }, 500);
+    const result = await postToRender(env, "/api/products", { action: "get_products" });
+    if (!result.ok) {
+        return jsonRes({ error: result.error }, result.status >= 400 ? result.status : 502);
     }
 
-    const ghResp = await fetch(rawGithubUrl, {
-        headers: { "User-Agent": "JARVIS-Worker" },
-        cf: { cacheTtl: 60, cacheEverything: false }
+    const items = Array.isArray(result.data?.products) ? result.data.products : [];
+    return jsonRes(groupByCategory(items), 200);
+}
+
+async function handleGetDownloadLink(env, body) {
+    const movieId = body.id ?? body.movie_id ?? body.watch_order;
+    if (movieId === undefined || movieId === null || String(movieId).trim() === "") {
+        return jsonRes({ error: "Missing movie id" }, 400);
+    }
+
+    const result = await postToRender(env, "/api/fetch", {
+        id: movieId,
+        quality: body.quality || "",
+        file_index: body.file_index ?? body.idx ?? null
     });
-    if (!ghResp.ok) {
-        return jsonRes({ error: `Failed to load products.js (${ghResp.status})` }, 502);
+
+    if (!result.ok) {
+        return jsonRes({ error: result.error }, result.status >= 400 ? result.status : 502);
     }
 
-    const rawProducts = parseProductsModuleSource(await ghResp.text());
+    const doc = result.data?.document || null;
+    if (!doc) {
+        return jsonRes({ document: null, download_url: null, files: [] }, 200);
+    }
 
-    const enriched = await Promise.all(
-        rawProducts.map(async (entry, idx) => {
-            const sourceLink = (entry.link || entry.rawUrl || entry.url || "").trim();
-            const [meta, profitUrl] = await Promise.all([
-                fetchProductMetadata(sourceLink),
-                entry.url ? Promise.resolve(entry.url.trim()) : convertWithEarnKaro(env, sourceLink)
-            ]);
+    const files = Array.isArray(doc.files) ? doc.files : [];
+    const requestedIndex =
+        body.file_index !== undefined && body.file_index !== null
+            ? Number(body.file_index)
+            : body.idx !== undefined && body.idx !== null
+                ? Number(body.idx)
+                : -1;
 
-            return {
-                id: entry.id || `p-${idx + 1}`,
-                title: entry.title || meta.title,
-                image: entry.image || meta.image || FALLBACK_IMAGE,
-                category: (entry.category && String(entry.category).trim()) || "General",
-                platform: entry.platform || "Store",
-                url: profitUrl || sourceLink || "#"
-            };
-        })
-    );
+    let selectedFile = null;
+    if (!Number.isNaN(requestedIndex) && requestedIndex >= 0 && requestedIndex < files.length) {
+        selectedFile = files[requestedIndex];
+    } else if (body.quality) {
+        const qTarget = String(body.quality).trim().toLowerCase();
+        selectedFile =
+            files.find((f) => String(f.quality || "").trim().toLowerCase() === qTarget) || null;
+    } else if (files.length > 0) {
+        selectedFile = files[0];
+    }
 
-    return jsonRes(groupByCategory(enriched), 200);
+    const downloadUrl =
+        selectedFile?.telegram_link ||
+        selectedFile?.url ||
+        selectedFile?.link ||
+        files.find((f) => f.telegram_link || f.url || f.link)?.telegram_link ||
+        null;
+
+    return jsonRes({
+        document: doc,
+        file: selectedFile,
+        download_url: downloadUrl,
+        files
+    }, 200);
 }
 
 export default {
@@ -180,12 +168,16 @@ export default {
             }
 
             const body = await request.json();
+            const action = String(body.action || "").trim();
 
-            if (body.action === "get_products") {
+            if (action === "get_products") {
                 return await handleGetProducts(env);
             }
 
-            // Keep your existing `meta` / `get_link` handlers here
+            if (action === "get_link" || action === "download" || action === "meta" || action === "fetch_movie") {
+                return await handleGetDownloadLink(env, body);
+            }
+
             return jsonRes({ error: "Unsupported action" }, 400);
         } catch (err) {
             return jsonRes({ error: err.message || "Internal error" }, 500);
