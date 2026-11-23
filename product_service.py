@@ -35,7 +35,7 @@ HEADERS = {
     "Referer": "https://www.google.com/",
 }
 
-FLIPKART_IMG_REGEX = re.compile(
+PRODUCT_IMG_REGEX = re.compile(
     r"https?://(?:rukminim[12]\.flixcart\.com|m\.media-amazon\.com|assets\.myntassets\.com)/[^\"'\s<>\\]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\"'\s<>\\]*)?",
     re.IGNORECASE,
 )
@@ -177,28 +177,54 @@ def _title_from_url_slug(url: str) -> str:
     return slug.title() if len(slug) > 3 else ""
 
 
-def _pick_best_product_image(parser: _MetaParser, html: str, final_url: str, ld_image: str, meta_image: str) -> str:
-    candidates = []
+def _pick_best_product_image(
+    parser: _MetaParser,
+    html: str,
+    final_url: str,
+    ld_image: str,
+    meta_image: str,
+) -> str:
+    pid_match = re.search(r"[?&]pid=([A-Za-z0-9]+)", final_url)
+    pid = pid_match.group(1).lower() if pid_match else ""
+
+    raw_candidates = []
     for raw in (ld_image, meta_image):
         if raw:
-            candidates.append(raw.strip())
+            raw_candidates.append(raw.strip())
 
-    for img_src in parser.candidate_images:
-        if "rukminim" in img_src.lower() or "flixcart" in img_src.lower():
-            candidates.insert(0, img_src)
-        else:
-            candidates.append(img_src)
+    raw_candidates.extend(parser.candidate_images)
 
     unescaped_html = unescape(html).replace("\\/", "/")
-    for match in FLIPKART_IMG_REGEX.findall(unescaped_html):
-        if match not in candidates:
-            candidates.append(match)
+    for match in PRODUCT_IMG_REGEX.findall(unescaped_html):
+        if match not in raw_candidates:
+            raw_candidates.append(match)
 
-    for raw_img in candidates:
+    scored = []
+    for raw_img in raw_candidates:
         resolved = urljoin(final_url, raw_img)
         parsed = urlparse(resolved)
-        if parsed.scheme in ("http", "https"):
-            return resolved
+        if parsed.scheme not in ("http", "https"):
+            continue
+
+        low = resolved.lower()
+        score = 0
+        if "/image/" in low:
+            score += 60
+        if "rukminim2.flixcart.com/image/" in low:
+            score += 15
+        if "rukminim" in low or "myntassets" in low or "media-amazon" in low:
+            score += 20
+        if pid and pid in low:
+            score += 40
+        if "/promos/" in low or "promo" in low or "banner" in low:
+            score -= 120
+
+        scored.append((score, resolved))
+
+    if scored:
+        scored.sort(key=lambda x: x[0], reverse=True)
+        if scored[0][0] > -50:
+            return scored[0][1]
 
     return FALLBACK_IMAGE
 
@@ -269,8 +295,17 @@ async def convert_earnkaro_link(deal_url: str) -> str:
         or "https://ekaro-api.affiliaters.in/api/converter/public"
     ).strip()
 
-    if not deal_url or not token:
+    if not deal_url:
+        print("[EARNKARO] Empty deal_url, skipping conversion", flush=True)
         return deal_url
+    if not token:
+        print("[EARNKARO] EARNKARO_TOKEN is missing/empty; returning original link", flush=True)
+        return deal_url
+
+    payload = {
+        "deal": deal_url,
+        "convert_option": "convert_only",
+    }
 
     try:
         timeout = aiohttp.ClientTimeout(total=12)
@@ -280,12 +315,18 @@ async def convert_earnkaro_link(deal_url: str) -> str:
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
                 },
-                json={"deal": deal_url},
+                json=payload,
             ) as resp:
-                data = await resp.json(content_type=None)
-                logger.info("EarnKaro response status=%s body=%s", resp.status, data)
+                raw_text = await resp.text()
+                print(f"[EARNKARO] HTTP {resp.status} -> {raw_text}", flush=True)
+                logger.info("EarnKaro HTTP %s -> %s", resp.status, raw_text)
+
+                try:
+                    data = json.loads(raw_text)
+                except Exception:
+                    data = None
+
                 if resp.status == 200 and isinstance(data, dict):
                     profit = data.get("data")
                     if isinstance(profit, dict):
@@ -298,9 +339,13 @@ async def convert_earnkaro_link(deal_url: str) -> str:
                         )
                     if not profit:
                         profit = data.get("url") or data.get("link") or data.get("short_url")
-                    if isinstance(profit, str) and profit.startswith(("http://", "https://")):
-                        return profit.strip()
+
+                    if isinstance(profit, str) and profit.strip().startswith(("http://", "https://")):
+                        converted = profit.strip()
+                        print(f"[EARNKARO] Converted link -> {converted}", flush=True)
+                        return converted
     except Exception as exc:
+        print(f"[EARNKARO] Exception: {exc}", flush=True)
         logger.warning("EarnKaro conversion error: %s", exc)
 
     return deal_url
