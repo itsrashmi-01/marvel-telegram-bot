@@ -5,10 +5,8 @@ const CORS_HEADERS = {
     "Content-Type": "application/json"
 };
 
-const GITHUB_PRODUCTS_URLS = [
-    "https://raw.githubusercontent.com/itsrashmi-01/marvel-telegram-bot/main/worker/products.json",
-    "https://raw.githubusercontent.com/itsrashmi-01/marvel-telegram-bot/master/worker/products.json"
-];
+const RAW_PRODUCTS_URL =
+    "https://raw.githubusercontent.com/itsrashmi-01/marvel-telegram-bot/main/worker/products.json";
 
 function jsonRes(data, status = 200) {
     return new Response(JSON.stringify(data), {
@@ -79,74 +77,58 @@ async function postToRender(env, path, payload, timeoutMs = 8000) {
     }
 }
 
-function normalizeProducts(rawList) {
-    if (!Array.isArray(rawList)) return [];
-    return rawList.map((item, idx) => ({
-        id: String(item.id || `prod-${idx + 1}`),
-        title: String(item.title || "Product").trim(),
-        price: String(item.price || "").trim(),
-        platform: String(item.platform || "Store").trim(),
-        category: String(item.category || "General").trim() || "General",
-        image: String(item.image || "").trim(),
-        url: String(item.url || "#").trim()
-    }));
-}
-
 function groupByCategory(items) {
     const map = new Map();
     for (const item of items) {
         const cat = (item.category && String(item.category).trim()) || "General";
         if (!map.has(cat)) map.set(cat, []);
-        map.get(cat).push(item);
+        map.get(cat).push({
+            id: String(item.id || ""),
+            title: String(item.title || "Product").trim(),
+            price: String(item.price || "").trim(),
+            platform: String(item.platform || "Store").trim(),
+            category: cat,
+            image: String(item.image || "").trim(),
+            url: String(item.url || "#").trim()
+        });
     }
+
+    const categories = Array.from(map.entries()).map(([name, list]) => ({
+        name,
+        count: list.length,
+        items: list
+    }));
+
     return {
         categoryList: Array.from(map.keys()),
-        categories: Array.from(map.entries()).map(([name, list]) => ({
-            name,
-            count: list.length,
-            items: list
-        })),
-        products: items
+        categories,
+        products: categories.flatMap((c) => c.items)
     };
 }
 
-async function fetchProductsFromGitHub(env) {
-    const urls = [];
-    if (env.GITHUB_PRODUCTS_JSON_URL && String(env.GITHUB_PRODUCTS_JSON_URL).trim()) {
-        urls.push(String(env.GITHUB_PRODUCTS_JSON_URL).trim());
-    }
-    urls.push(...GITHUB_PRODUCTS_URLS);
-
-    for (const rawUrl of urls) {
-        const sep = rawUrl.includes("?") ? "&" : "?";
-        const bustUrl = `${rawUrl}${sep}t=${Math.floor(Date.now() / 60000)}`;
-
-        const resp = await fetch(bustUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Cloudflare-Worker-Jarvis/1.0",
-                "Accept": "application/json"
-            },
-            cf: {
-                cacheTtl: 60,
-                cacheEverything: true
-            }
-        });
-
-        if (resp.ok) {
-            const parsed = await resp.json();
-            if (Array.isArray(parsed)) return parsed;
-            if (Array.isArray(parsed?.products)) return parsed.products;
-            return [];
-        }
-    }
-
-    throw new Error("Could not fetch worker/products.json from GitHub");
-}
-
 async function handleGetProducts(env) {
-    const rawItems = await fetchProductsFromGitHub(env);
-    const items = normalizeProducts(rawItems);
+    const sourceUrl = (env.GITHUB_PRODUCTS_URL || RAW_PRODUCTS_URL).trim();
+    const resp = await fetch(sourceUrl, {
+        method: "GET",
+        headers: {
+            "User-Agent": "Cloudflare-Worker-Jarvis/1.0",
+            "Accept": "application/json"
+        },
+        cf: {
+            cacheTtl: 60,
+            cacheEverything: true
+        }
+    });
+
+    if (!resp.ok) {
+        return jsonRes({ error: `GitHub fetch failed (${resp.status})` }, 502);
+    }
+
+    const rawData = await resp.json();
+    const items = Array.isArray(rawData)
+        ? rawData
+        : (Array.isArray(rawData?.products) ? rawData.products : []);
+
     return jsonRes(groupByCategory(items), 200);
 }
 
