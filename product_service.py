@@ -35,6 +35,11 @@ HEADERS = {
     "Referer": "https://www.google.com/",
 }
 
+FLIPKART_IMG_REGEX = re.compile(
+    r"https?://(?:rukminim[12]\.flixcart\.com|m\.media-amazon\.com|assets\.myntassets\.com)/[^\"'\s<>\\]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\"'\s<>\\]*)?",
+    re.IGNORECASE,
+)
+
 
 class _MetaParser(HTMLParser):
     def __init__(self):
@@ -43,13 +48,25 @@ class _MetaParser(HTMLParser):
         self.json_ld = []
         self.title_parts = []
         self.text_parts = []
+        self.candidate_images = []
         self._in_title = False
         self._in_ld = False
         self._skip = False
 
+    def _record_image(self, raw_src: str):
+        s = (raw_src or "").strip()
+        if not s or s.startswith("data:"):
+            return
+        low = s.lower()
+        if any(skip in low for skip in ("sprite", "logo", "icon", "svg", "1x1", "placeholder", "spinner")):
+            return
+        if s not in self.candidate_images:
+            self.candidate_images.append(s)
+
     def handle_starttag(self, tag, attrs):
         t = tag.lower()
         amap = {k.lower(): v for k, v in attrs if v is not None}
+
         if t == "meta":
             k = (amap.get("property") or amap.get("name") or amap.get("itemprop") or "").strip().lower()
             c = (amap.get("content") or "").strip()
@@ -57,6 +74,12 @@ class _MetaParser(HTMLParser):
                 self.metas[k] = c
         elif t == "title":
             self._in_title = True
+        elif t == "img":
+            for attr in ("src", "data-src", "data-original", "srcset", "data-srcset"):
+                val = amap.get(attr)
+                if val:
+                    first_part = val.split(",")[0].strip().split(" ")[0].strip()
+                    self._record_image(first_part)
         elif t == "script":
             if "ld+json" in (amap.get("type") or "").lower():
                 self._in_ld = True
@@ -150,9 +173,34 @@ def _title_from_url_slug(url: str) -> str:
     parts = [p for p in path.split("/") if p and p not in ("p", "itm")]
     if not parts:
         return ""
-    slug = parts[0]
-    slug = re.sub(r"[-_]+", " ", slug).strip()
+    slug = re.sub(r"[-_]+", " ", parts[0]).strip()
     return slug.title() if len(slug) > 3 else ""
+
+
+def _pick_best_product_image(parser: _MetaParser, html: str, final_url: str, ld_image: str, meta_image: str) -> str:
+    candidates = []
+    for raw in (ld_image, meta_image):
+        if raw:
+            candidates.append(raw.strip())
+
+    for img_src in parser.candidate_images:
+        if "rukminim" in img_src.lower() or "flixcart" in img_src.lower():
+            candidates.insert(0, img_src)
+        else:
+            candidates.append(img_src)
+
+    unescaped_html = unescape(html).replace("\\/", "/")
+    for match in FLIPKART_IMG_REGEX.findall(unescaped_html):
+        if match not in candidates:
+            candidates.append(match)
+
+    for raw_img in candidates:
+        resolved = urljoin(final_url, raw_img)
+        parsed = urlparse(resolved)
+        if parsed.scheme in ("http", "https"):
+            return resolved
+
+    return FALLBACK_IMAGE
 
 
 async def fetch_product_details(url: str) -> dict:
@@ -177,7 +225,6 @@ async def fetch_product_details(url: str) -> dict:
     metas = parser.metas
 
     raw_html_title = "".join(parser.title_parts).strip()
-    # Flipkart often returns generic homepage title when blocking datacenter requests
     if "online shopping india" in raw_html_title.lower() and "buy mobiles" in raw_html_title.lower():
         raw_html_title = ""
 
@@ -190,13 +237,8 @@ async def fetch_product_details(url: str) -> dict:
         or "Product Deal"
     )
 
-    raw_img = ld["image"] or metas.get("og:image") or metas.get("twitter:image") or ""
-    if raw_img and "rukminim" not in raw_img and not raw_img.startswith("http"):
-        image = urljoin(final_url, raw_img)
-    elif raw_img:
-        image = urljoin(final_url, raw_img)
-    else:
-        image = FALLBACK_IMAGE
+    meta_img = metas.get("og:image") or metas.get("twitter:image") or ""
+    image = _pick_best_product_image(parser, html, final_url, ld["image"], meta_img)
 
     price = (
         ld["price"]
@@ -227,10 +269,7 @@ async def convert_earnkaro_link(deal_url: str) -> str:
         or "https://ekaro-api.affiliaters.in/api/converter/public"
     ).strip()
 
-    if not deal_url:
-        return deal_url
-    if not token:
-        logger.warning("EARNKARO_TOKEN is empty; saving original URL")
+    if not deal_url or not token:
         return deal_url
 
     try:
