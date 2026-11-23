@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from html import unescape
 from html.parser import HTMLParser
@@ -7,6 +8,8 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 from config import Config
 from database import save_product_item, get_products_grouped_by_category
+
+logger = logging.getLogger(__name__)
 
 CATEGORIES = [
     "Collectibles",
@@ -23,11 +26,13 @@ FALLBACK_IMAGE = (
 
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Mobile Safari/537.36"
+        "Chrome/126.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-IN,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8",
+    "Referer": "https://www.google.com/",
 }
 
 
@@ -140,6 +145,16 @@ def _parse_json_ld(blocks: list) -> dict:
     return out
 
 
+def _title_from_url_slug(url: str) -> str:
+    path = urlparse(url).path or ""
+    parts = [p for p in path.split("/") if p and p not in ("p", "itm")]
+    if not parts:
+        return ""
+    slug = parts[0]
+    slug = re.sub(r"[-_]+", " ", slug).strip()
+    return slug.title() if len(slug) > 3 else ""
+
+
 async def fetch_product_details(url: str) -> dict:
     clean_url = url.strip()
     final_url = clean_url
@@ -151,8 +166,8 @@ async def fetch_product_details(url: str) -> dict:
             async with session.get(clean_url, allow_redirects=True) as resp:
                 final_url = str(resp.url)
                 html = await resp.text(errors="replace")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("HTTP fetch error for %s: %s", clean_url, exc)
 
     parser = _MetaParser()
     parser.feed(html)
@@ -161,23 +176,38 @@ async def fetch_product_details(url: str) -> dict:
     ld = _parse_json_ld(parser.json_ld)
     metas = parser.metas
 
+    raw_html_title = "".join(parser.title_parts).strip()
+    # Flipkart often returns generic homepage title when blocking datacenter requests
+    if "online shopping india" in raw_html_title.lower() and "buy mobiles" in raw_html_title.lower():
+        raw_html_title = ""
+
     title = (
         ld["title"]
         or metas.get("og:title")
         or metas.get("twitter:title")
-        or "".join(parser.title_parts).strip()
+        or raw_html_title
+        or _title_from_url_slug(final_url)
         or "Product Deal"
     )
 
     raw_img = ld["image"] or metas.get("og:image") or metas.get("twitter:image") or ""
-    image = urljoin(final_url, raw_img) if raw_img else FALLBACK_IMAGE
+    if raw_img and "rukminim" not in raw_img and not raw_img.startswith("http"):
+        image = urljoin(final_url, raw_img)
+    elif raw_img:
+        image = urljoin(final_url, raw_img)
+    else:
+        image = FALLBACK_IMAGE
 
     price = (
         ld["price"]
         or _clean_price(metas.get("product:price:amount") or metas.get("og:price:amount") or "")
     )
     if not price:
-        m = re.search(r"(?:₹|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)", " ".join(parser.text_parts), re.IGNORECASE)
+        m = re.search(
+            r"(?:₹|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)(?!\s*/\s*(?:mo|month|yr|day))",
+            " ".join(parser.text_parts),
+            re.IGNORECASE,
+        )
         if m:
             price = _clean_price(m.group(1))
 
@@ -191,35 +221,48 @@ async def fetch_product_details(url: str) -> dict:
 
 
 async def convert_earnkaro_link(deal_url: str) -> str:
-    token = getattr(Config, "EARNKARO_TOKEN", "")
-    api_url = getattr(
-        Config,
-        "EARNKARO_CONVERTER_URL",
-        "https://ekaro-api.affiliaters.in/api/converter/public",
-    )
-    if not token or not deal_url:
+    token = (getattr(Config, "EARNKARO_TOKEN", "") or "").strip()
+    api_url = (
+        getattr(Config, "EARNKARO_CONVERTER_URL", "")
+        or "https://ekaro-api.affiliaters.in/api/converter/public"
+    ).strip()
+
+    if not deal_url:
+        return deal_url
+    if not token:
+        logger.warning("EARNKARO_TOKEN is empty; saving original URL")
         return deal_url
 
     try:
-        timeout = aiohttp.ClientTimeout(total=10)
+        timeout = aiohttp.ClientTimeout(total=12)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 api_url,
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
+                    "Accept": "application/json",
                 },
                 json={"deal": deal_url},
             ) as resp:
                 data = await resp.json(content_type=None)
+                logger.info("EarnKaro response status=%s body=%s", resp.status, data)
                 if resp.status == 200 and isinstance(data, dict):
                     profit = data.get("data")
                     if isinstance(profit, dict):
-                        profit = profit.get("url") or profit.get("link") or profit.get("deal")
+                        profit = (
+                            profit.get("url")
+                            or profit.get("link")
+                            or profit.get("deal")
+                            or profit.get("short_url")
+                            or profit.get("profit_link")
+                        )
+                    if not profit:
+                        profit = data.get("url") or data.get("link") or data.get("short_url")
                     if isinstance(profit, str) and profit.startswith(("http://", "https://")):
-                        return profit
-    except Exception:
-        pass
+                        return profit.strip()
+    except Exception as exc:
+        logger.warning("EarnKaro conversion error: %s", exc)
 
     return deal_url
 
