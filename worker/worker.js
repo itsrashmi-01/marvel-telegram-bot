@@ -23,7 +23,7 @@ function getBackendConfig(env) {
     return { baseUrl, secret };
 }
 
-async function postToRender(env, path, payload, timeoutMs = 8000) {
+async function postToRender(env, path, payload, timeoutMs = 25000) {
     const { baseUrl, secret } = getBackendConfig(env);
     if (!baseUrl) {
         throw new Error("RENDER_URL is missing");
@@ -71,7 +71,9 @@ async function postToRender(env, path, payload, timeoutMs = 8000) {
         return {
             ok: false,
             status: 502,
-            error: err.message || "Failed to reach backend",
+            error: err.name === "AbortError"
+                ? "Backend timed out while waking up"
+                : (err.message || "Failed to reach backend"),
             data: {}
         };
     }
@@ -132,16 +134,46 @@ async function handleGetProducts(env) {
     return jsonRes(groupByCategory(items), 200);
 }
 
+function pickFileUrl(file, mode) {
+    if (!file || typeof file !== "object") return null;
+
+    if (mode === "direct") {
+        const candidates = [
+            file.direct_url,
+            file.download_url,
+            file.url,
+            file.link,
+            file.telegram_link
+        ].map((u) => (u ? String(u).trim() : "")).filter(Boolean);
+
+        const nonTelegram = candidates.find((u) => !/^https?:\/\/(t\.me|telegram\.me)\//i.test(u));
+        return nonTelegram || candidates[0] || null;
+    }
+
+    const tgCandidates = [
+        file.telegram_link,
+        file.url,
+        file.link,
+        file.direct_url,
+        file.download_url
+    ].map((u) => (u ? String(u).trim() : "")).filter(Boolean);
+
+    return tgCandidates[0] || null;
+}
+
 async function handleGetDownloadLink(env, body) {
     const movieId = body.id ?? body.movie_id ?? body.watch_order;
     if (movieId === undefined || movieId === null || String(movieId).trim() === "") {
         return jsonRes({ error: "Missing movie id" }, 400);
     }
 
+    const mode = String(body.type || "").trim().toLowerCase();
+
     const result = await postToRender(env, "/api/fetch", {
         id: movieId,
         quality: body.quality || "",
-        file_index: body.file_index ?? body.idx ?? null
+        file_index: body.file_index ?? body.idx ?? null,
+        type: mode
     });
 
     if (!result.ok) {
@@ -150,7 +182,7 @@ async function handleGetDownloadLink(env, body) {
 
     const doc = result.data?.document || null;
     if (!doc) {
-        return jsonRes({ document: null, download_url: null, files: [] }, 200);
+        return jsonRes({ document: null, download_url: null, url: null, files: [] }, 200);
     }
 
     const files = Array.isArray(doc.files) ? doc.files : [];
@@ -162,27 +194,34 @@ async function handleGetDownloadLink(env, body) {
                 : -1;
 
     let selectedFile = null;
-    if (!Number.isNaN(requestedIndex) && requestedIndex >= 0 && requestedIndex < files.length) {
-        selectedFile = files[requestedIndex];
-    } else if (body.quality) {
+    if (body.quality) {
         const qTarget = String(body.quality).trim().toLowerCase();
         selectedFile =
-            files.find((f) => String(f.quality || "").trim().toLowerCase() === qTarget) || null;
-    } else if (files.length > 0) {
+            files.find((f) => String(f.quality || f.res || f.resolution || "").trim().toLowerCase() === qTarget) || null;
+    }
+    if (!selectedFile && !Number.isNaN(requestedIndex) && requestedIndex >= 0 && requestedIndex < files.length) {
+        selectedFile = files[requestedIndex];
+    }
+    if (!selectedFile && files.length > 0) {
         selectedFile = files[0];
     }
 
+    const backendUrl =
+        (mode === "direct"
+            ? (result.data?.direct_url || result.data?.download_url || result.data?.url)
+            : (result.data?.telegram_link || result.data?.download_url || result.data?.url)) || "";
+
     const downloadUrl =
-        selectedFile?.telegram_link ||
-        selectedFile?.url ||
-        selectedFile?.link ||
-        files.find((f) => f.telegram_link || f.url || f.link)?.telegram_link ||
+        String(backendUrl || "").trim() ||
+        pickFileUrl(selectedFile, mode) ||
+        files.map((f) => pickFileUrl(f, mode)).find(Boolean) ||
         null;
 
     return jsonRes({
         document: doc,
         file: selectedFile,
         download_url: downloadUrl,
+        url: downloadUrl,
         files
     }, 200);
 }
