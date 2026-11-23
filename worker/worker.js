@@ -138,25 +138,29 @@ function pickFileUrl(file, mode) {
     if (!file || typeof file !== "object") return null;
 
     if (mode === "direct") {
-        const candidates = [
+        const directCandidates = [
+            file.mediafire_link,
+            file.mediafire_url,
+            file.mediafire,
             file.direct_url,
             file.download_url,
             file.url,
-            file.link,
-            file.telegram_link
-        ].map((u) => (u ? String(u).trim() : "")).filter(Boolean);
+            file.link
+        ]
+            .map((u) => (u ? String(u).trim() : ""))
+            .filter(Boolean);
 
-        const nonTelegram = candidates.find((u) => !/^https?:\/\/(t\.me|telegram\.me)\//i.test(u));
-        return nonTelegram || candidates[0] || null;
+        const nonTelegram = directCandidates.find((u) => !/^https?:\/\/(t\.me|telegram\.me)\//i.test(u));
+        return nonTelegram || null;
     }
 
     const tgCandidates = [
         file.telegram_link,
         file.url,
-        file.link,
-        file.direct_url,
-        file.download_url
-    ].map((u) => (u ? String(u).trim() : "")).filter(Boolean);
+        file.link
+    ]
+        .map((u) => (u ? String(u).trim() : ""))
+        .filter(Boolean);
 
     return tgCandidates[0] || null;
 }
@@ -206,16 +210,22 @@ async function handleGetDownloadLink(env, body) {
         selectedFile = files[0];
     }
 
-    const backendUrl =
-        (mode === "direct"
-            ? (result.data?.direct_url || result.data?.download_url || result.data?.url)
-            : (result.data?.telegram_link || result.data?.download_url || result.data?.url)) || "";
+    let downloadUrl = pickFileUrl(selectedFile, mode) || files.map((f) => pickFileUrl(f, mode)).find(Boolean) || null;
 
-    const downloadUrl =
-        String(backendUrl || "").trim() ||
-        pickFileUrl(selectedFile, mode) ||
-        files.map((f) => pickFileUrl(f, mode)).find(Boolean) ||
-        null;
+    if (!downloadUrl) {
+        const fallbackFromBackend =
+            mode === "direct"
+                ? (result.data?.mediafire_link || result.data?.direct_url || result.data?.download_url || result.data?.url || "")
+                : (result.data?.telegram_link || result.data?.download_url || result.data?.url || "");
+        const cleaned = String(fallbackFromBackend || "").trim();
+        if (cleaned) {
+            if (mode === "direct" && /^https?:\/\/(t\.me|telegram\.me)\//i.test(cleaned)) {
+                downloadUrl = null;
+            } else {
+                downloadUrl = cleaned;
+            }
+        }
+    }
 
     return jsonRes({
         document: doc,
