@@ -4,7 +4,14 @@ from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton,
 from hydrogram.errors import MessageNotModified
 from config import Config
 from plugins.list import RAW_MARVEL_LIST
-from database import db, movies_col, get_target_channels, add_target_channel, remove_target_channel, get_movie_by_order, init_marvel_list
+from database import (
+    movies_col,
+    get_target_channels,
+    add_target_channel,
+    remove_target_channel,
+    get_movie_by_order,
+    init_marvel_list,
+)
 from template import to_small_caps
 from product_service import CATEGORIES, ProductRepository
 
@@ -20,23 +27,27 @@ SAGA_CATEGORIES = {
     "mcu": "MCU + Defenders Saga",
     "multi": "Multiverse Saga",
     "f4": "Fantastic Four Universe",
-    "xmen": "X-Men / Fox Universe"
+    "xmen": "X-Men / Fox Universe",
 }
+
+
+def _is_admin(user) -> bool:
+    return bool(user and Config.ADMIN_ID and user.id == Config.ADMIN_ID)
 
 
 def _main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(to_small_caps("📤 ᴜᴘʟᴏᴀᴅ ᴍᴏᴠɪᴇ"), callback_data="upload_menu"),
-            InlineKeyboardButton(to_small_caps("🛍️ ᴀᴅᴅ ᴘʀᴏᴅᴜᴄᴛ"), callback_data="add_product_menu")
+            InlineKeyboardButton(to_small_caps("🛍️ ᴀᴅᴅ ᴘʀᴏᴅᴜᴄᴛ"), callback_data="add_product_menu"),
         ],
         [
             InlineKeyboardButton(to_small_caps("📝 ᴘᴜʙʟɪsʜ ᴘᴏsᴛs"), callback_data="post_menu_back"),
-            InlineKeyboardButton(to_small_caps("📢 ᴍʏ ᴄʜᴀɴɴᴇʟs"), callback_data="manage_channel")
+            InlineKeyboardButton(to_small_caps("📢 ᴍʏ ᴄʜᴀɴɴᴇʟs"), callback_data="manage_channel"),
         ],
         [
-            InlineKeyboardButton(to_small_caps("⚙️ sᴇᴛᴛɪɴɢs"), callback_data="settings_menu")
-        ]
+            InlineKeyboardButton(to_small_caps("⚙️ sᴇᴛᴛɪɴɢs"), callback_data="settings_menu"),
+        ],
     ])
 
 
@@ -44,9 +55,9 @@ def _has_file_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(to_small_caps("✅ ʏᴇs, ɪ ʜᴀᴠᴇ ғɪʟᴇ"), callback_data="has_file_yes"),
-            InlineKeyboardButton(to_small_caps("⏭️ ɴᴏ, sᴋɪᴘ ғɪʟᴇ"), callback_data="has_file_no")
+            InlineKeyboardButton(to_small_caps("⏭️ ɴᴏ, sᴋɪᴘ ғɪʟᴇ"), callback_data="has_file_no"),
         ],
-        [InlineKeyboardButton(to_small_caps("✘ ᴄᴀɴᴄᴇʟ ᴜᴘʟᴏᴀᴅ"), callback_data="cancel_upload")]
+        [InlineKeyboardButton(to_small_caps("✘ ᴄᴀɴᴄᴇʟ ᴜᴘʟᴏᴀᴅ"), callback_data="cancel_upload")],
     ])
 
 
@@ -61,7 +72,7 @@ def _product_category_keyboard() -> InlineKeyboardMarkup:
                 row.append(
                     InlineKeyboardButton(
                         to_small_caps(cat_name),
-                        callback_data=f"prod_cat_{cat_idx}"
+                        callback_data=f"prod_cat_{cat_idx}",
                     )
                 )
         rows.append(row)
@@ -70,17 +81,15 @@ def _product_category_keyboard() -> InlineKeyboardMarkup:
 
 
 async def add_product_to_db(raw_link: str, category: str) -> dict:
-    """Fetches product metadata, converts via EarnKaro, and persists in MongoDB."""
-    saved = await products_repo.save_product(raw_link, category)
-    if db is not None and getattr(products_repo, "col", None) is None:
-        await db["products"].insert_one(dict(saved))
-    return saved
+    """Fetches product metadata, converts via EarnKaro, and persists once in MongoDB."""
+    return await products_repo.save_product(raw_link, category)
 
 
 @Client.on_message(filters.command("start") & filters.private)
 async def start_handler(client: Client, message: Message):
-    is_admin = (message.from_user.id == Config.ADMIN_ID)
-    user_name = to_small_caps(message.from_user.first_name)
+    admin = _is_admin(message.from_user)
+    first_name = message.from_user.first_name if message.from_user else "User"
+    user_name = to_small_caps(first_name)
     text = (
         f"<blockquote>👋 <b>ᴡᴇʟᴄᴏᴍᴇ {user_name}!</b>\n\n"
         f"ɪ ᴀᴍ ᴛʜᴇ ᴍᴀʀᴠᴇʟ ᴜɴɪᴠᴇʀsᴇ ᴍᴇᴅɪᴀ ʙᴏᴛ.\n"
@@ -88,17 +97,18 @@ async def start_handler(client: Client, message: Message):
     )
     await message.reply_text(
         text,
-        reply_markup=_main_menu_keyboard() if is_admin else None
+        reply_markup=_main_menu_keyboard() if admin else None,
     )
 
 
 @Client.on_callback_query(filters.regex("^main_menu$"))
 async def return_main_menu(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
-    WAITING_FOR_CHANNEL.pop(query.from_user.id, None)
-    WAITING_FOR_PRODUCT_LINK.pop(query.from_user.id, None)
-    PENDING_PRODUCT_LINK.pop(query.from_user.id, None)
+    user_id = query.from_user.id
+    WAITING_FOR_CHANNEL.pop(user_id, None)
+    WAITING_FOR_PRODUCT_LINK.pop(user_id, None)
+    PENDING_PRODUCT_LINK.pop(user_id, None)
 
     text = (
         "<blockquote>👋 <b>ᴡᴇʟᴄᴏᴍᴇ ʙᴀᴄᴋ ᴛᴏ ᴛʜᴇ ᴍᴀɪɴ ᴍᴇɴᴜ!</b>\n\n"
@@ -117,7 +127,7 @@ async def return_main_menu(client: Client, query: CallbackQuery):
 # --- ADD PRODUCT FLOW ---
 @Client.on_callback_query(filters.regex("^add_product_menu$"))
 async def add_product_menu_handler(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     user_id = query.from_user.id
     WAITING_FOR_CHANNEL.pop(user_id, None)
@@ -139,7 +149,7 @@ async def add_product_menu_handler(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex("^cancel_add_product$"))
 async def cancel_add_product_handler(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     user_id = query.from_user.id
     WAITING_FOR_PRODUCT_LINK.pop(user_id, None)
@@ -150,7 +160,7 @@ async def cancel_add_product_handler(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^prod_cat_(\d+)$"))
 async def select_product_category_handler(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     user_id = query.from_user.id
     product_url = PENDING_PRODUCT_LINK.get(user_id)
@@ -181,7 +191,7 @@ async def select_product_category_handler(client: Client, query: CallbackQuery):
         price_line = f"<b>ᴘʀɪᴄᴇ:</b> <code>{saved['price']}</code>\n" if saved.get("price") else ""
         buttons = [
             [InlineKeyboardButton(to_small_caps("➕ ᴀᴅᴅ ᴀɴᴏᴛʜᴇʀ ᴘʀᴏᴅᴜᴄᴛ"), callback_data="add_product_menu")],
-            [InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")]
+            [InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")],
         ]
         text = (
             f"<blockquote>✔ <b>ᴘʀᴏᴅᴜᴄᴛ sᴀᴠᴇᴅ!</b>\n\n"
@@ -197,13 +207,13 @@ async def select_product_category_handler(client: Client, query: CallbackQuery):
             f"<blockquote>✘ <b>ғᴀɪʟᴇᴅ ᴛᴏ sᴀᴠᴇ ᴘʀᴏᴅᴜᴄᴛ:</b>\n<code>{exc}</code></blockquote>",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")]
-            ])
+            ]),
         )
 
 
 @Client.on_callback_query(filters.regex("^settings_menu$"))
 async def settings_menu_handler(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     buttons = [[InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴀɪɴ ᴍᴇɴᴜ"), callback_data="main_menu")]]
     text = "<blockquote>⚙️ <b>sᴇᴛᴛɪɴɢs</b>\n\nғᴜᴛᴜʀᴇ ᴄᴏɴғɪɢᴜʀᴀᴛɪᴏɴs ᴀɴᴅ ᴏᴘᴛɪᴏɴs ᴡɪʟʟ ᴀᴘᴘᴇᴀʀ ʜᴇʀᴇ.</blockquote>"
@@ -216,7 +226,7 @@ async def settings_menu_handler(client: Client, query: CallbackQuery):
 # --- UPLOAD MENU ---
 @Client.on_callback_query(filters.regex("^upload_menu$"))
 async def upload_menu_selection(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     buttons = []
     for code, full_name in SAGA_CATEGORIES.items():
@@ -236,7 +246,7 @@ async def upload_menu_selection(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^saga_(.+)_(\d+)$"))
 async def saga_pagination(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     code = query.data.split("_")[1]
     page = int(query.data.split("_")[2])
@@ -245,7 +255,7 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     saga_movies = [m for m in RAW_MARVEL_LIST if m["saga"] == full_saga_name]
     uploaded_docs = await movies_col.find(
         {"saga": full_saga_name, "files": {"$exists": True, "$not": {"$size": 0}}},
-        {"watch_order": 1}
+        {"watch_order": 1},
     ).to_list(length=100)
     uploaded_set = {doc["watch_order"] for doc in uploaded_docs}
 
@@ -256,7 +266,7 @@ async def saga_pagination(client: Client, query: CallbackQuery):
     buttons = []
     for item in saga_movies[start_idx : start_idx + items_per_page]:
         status_icon = "✔" if item["order"] in uploaded_set else "✘"
-        btn_text = f"{status_icon} " + to_small_caps(item['title'])
+        btn_text = f"{status_icon} " + to_small_caps(item["title"])
         buttons.append([InlineKeyboardButton(btn_text, callback_data=f"init_upload_{item['order']}")])
 
     nav = []
@@ -286,7 +296,7 @@ async def saga_pagination(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^init_upload_(\d+)$"))
 async def init_upload(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     order = int(query.data.split("_")[2])
     raw_movie = next((m for m in RAW_MARVEL_LIST if m["order"] == order), None)
@@ -303,7 +313,7 @@ async def init_upload(client: Client, query: CallbackQuery):
             "watch_order": order,
             "title": raw_movie["title"],
             "files": [],
-            "status": "ask_has_file"
+            "status": "ask_has_file",
         }
         sc_title = to_small_caps(raw_movie["title"])
         text = (
@@ -314,7 +324,7 @@ async def init_upload(client: Client, query: CallbackQuery):
         await client.send_message(
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=_has_file_keyboard()
+            reply_markup=_has_file_keyboard(),
         )
     else:
         await query.answer(to_small_caps("ᴇʀʀᴏʀ ɪɴɪᴛɪᴀᴛɪɴɢ ᴜᴘʟᴏᴀᴅ."), show_alert=True)
@@ -323,10 +333,9 @@ async def init_upload(client: Client, query: CallbackQuery):
 # --- CHANNEL MANAGEMENT UI ---
 @Client.on_callback_query(filters.regex("^manage_channel$"))
 async def channel_manager_menu(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
-    if query.from_user.id in WAITING_FOR_CHANNEL:
-        del WAITING_FOR_CHANNEL[query.from_user.id]
+    WAITING_FOR_CHANNEL.pop(query.from_user.id, None)
 
     channels = await get_target_channels()
     buttons = []
@@ -334,7 +343,7 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
 
     if channels:
         for ch in channels:
-            sc_name = to_small_caps(ch['name'])
+            sc_name = to_small_caps(ch["name"])
             channel_text += f"• <b>{sc_name}</b> (<code>{ch['id']}</code>)\n"
             buttons.append([InlineKeyboardButton(to_small_caps(f"🗑 ᴅᴇʟᴇᴛᴇ {ch['name'][:15]}"), callback_data=f"del_chan_{ch['id']}")])
     else:
@@ -356,7 +365,7 @@ async def channel_manager_menu(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^del_chan_(-?\d+)$"))
 async def delete_channel(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     chan_id = int(query.data.split("_")[2])
     await remove_target_channel(chan_id)
@@ -366,7 +375,7 @@ async def delete_channel(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex("^set_new_channel$"))
 async def ask_for_channel(client: Client, query: CallbackQuery):
-    if query.from_user.id != Config.ADMIN_ID:
+    if not _is_admin(query.from_user):
         return
     WAITING_FOR_CHANNEL[query.from_user.id] = True
     buttons = [[InlineKeyboardButton(to_small_caps("✘ ᴄᴀɴᴄᴇʟ"), callback_data="manage_channel")]]
@@ -382,8 +391,12 @@ async def ask_for_channel(client: Client, query: CallbackQuery):
         pass
 
 
-@Client.on_message(filters.private & filters.user(Config.ADMIN_ID))
+@Client.on_message(filters.private)
 async def capture_admin_input(client: Client, message: Message):
+    if not _is_admin(message.from_user):
+        message.continue_propagation()
+        return
+
     user_id = message.from_user.id
 
     if WAITING_FOR_PRODUCT_LINK.get(user_id):
@@ -401,7 +414,7 @@ async def capture_admin_input(client: Client, message: Message):
         await message.reply_text(
             f"<blockquote>🗂️ <b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ:</b>\n\n"
             f"<b>ʟɪɴᴋ:</b> <code>{product_url}</code></blockquote>",
-            reply_markup=_product_category_keyboard()
+            reply_markup=_product_category_keyboard(),
         )
         return
 
@@ -425,7 +438,7 @@ async def capture_admin_input(client: Client, message: Message):
         channel_name = f"Unknown Channel ({channel_id})"
 
     await add_target_channel(channel_id, channel_name)
-    del WAITING_FOR_CHANNEL[user_id]
+    WAITING_FOR_CHANNEL.pop(user_id, None)
 
     sc_channel_name = to_small_caps(channel_name)
     buttons = [[InlineKeyboardButton(to_small_caps("🔙 ʙᴀᴄᴋ ᴛᴏ ᴄʜᴀɴɴᴇʟ ᴍᴇɴᴜ"), callback_data="manage_channel")]]
