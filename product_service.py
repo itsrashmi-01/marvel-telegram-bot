@@ -12,8 +12,11 @@ from database import save_product_item, get_products_grouped_by_category
 logger = logging.getLogger(__name__)
 
 CATEGORIES = [
+    "Hoodies"
+    "T-shirt"
+    "Poster Frame"
+    "Stickers and wallpapers"
     "Collectibles",
-    "Apparel",
     "Accessories",
     "Gadgets",
     "Home & Decor",
