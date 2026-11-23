@@ -16,7 +16,10 @@ CATEGORIES = [
     "Home & Decor",
 ]
 
-FALLBACK_IMAGE = "https://ik.imagekit.io/itsrashmi/Marvel%20Sticker/Avengers.webp"
+FALLBACK_IMAGE = (
+    "https://ik.imagekit.io/itsrashmi/"
+    "Marvel%20Sticker/Avengers.webp"
+)
 
 HEADERS = {
     "User-Agent": (
@@ -28,7 +31,7 @@ HEADERS = {
 }
 
 
-class _SimpleMetaParser(HTMLParser):
+class _MetaParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.metas = {}
@@ -78,27 +81,28 @@ class _SimpleMetaParser(HTMLParser):
                 self.text_parts.append(s)
 
 
-def detect_store(url: str) -> str:
+def detect_platform(url: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     if "flipkart" in host or "fkrt" in host:
         return "Flipkart"
     if "myntra" in host:
         return "Myntra"
+    if "amazon" in host or "amzn" in host:
+        return "Amazon"
     return "Store"
 
 
-def _clean_price(raw_val) -> str:
-    if not raw_val:
+def _clean_price(val) -> str:
+    if not val:
         return ""
-    s = unescape(str(raw_val)).strip()
-    m = re.search(r"[\d,]+(?:\.\d{1,2})?", s)
+    m = re.search(r"[\d,]+(?:\.\d{1,2})?", unescape(str(val)))
     if not m:
         return ""
     num = m.group(0).replace(",", "")
-    return f"₹{num}"
+    return f"₹{num}" if num else ""
 
 
-def _parse_ld_product(blocks: list) -> dict:
+def _parse_json_ld(blocks: list) -> dict:
     out = {"title": "", "image": "", "price": ""}
     for raw in blocks:
         try:
@@ -111,7 +115,7 @@ def _parse_ld_product(blocks: list) -> dict:
             if isinstance(cur, list):
                 stack.extend(cur)
             elif isinstance(cur, dict):
-                if "@graph" in cur and isinstance(cur["@graph"], list):
+                if isinstance(cur.get("@graph"), list):
                     stack.extend(cur["@graph"])
                 types = cur.get("@type", [])
                 if isinstance(types, str):
@@ -136,22 +140,25 @@ def _parse_ld_product(blocks: list) -> dict:
     return out
 
 
-async def fetch_product_info(url: str) -> dict:
+async def fetch_product_details(url: str) -> dict:
     clean_url = url.strip()
     final_url = clean_url
     html = ""
 
-    timeout = aiohttp.ClientTimeout(total=15)
-    async with aiohttp.ClientSession(headers=HEADERS, timeout=timeout) as session:
-        async with session.get(clean_url, allow_redirects=True) as resp:
-            final_url = str(resp.url)
-            html = await resp.text(errors="replace")
+    try:
+        timeout = aiohttp.ClientTimeout(total=12)
+        async with aiohttp.ClientSession(headers=HEADERS, timeout=timeout) as session:
+            async with session.get(clean_url, allow_redirects=True) as resp:
+                final_url = str(resp.url)
+                html = await resp.text(errors="replace")
+    except Exception:
+        pass
 
-    parser = _SimpleMetaParser()
+    parser = _MetaParser()
     parser.feed(html)
     parser.close()
 
-    ld = _parse_ld_product(parser.json_ld)
+    ld = _parse_json_ld(parser.json_ld)
     metas = parser.metas
 
     title = (
@@ -170,8 +177,7 @@ async def fetch_product_info(url: str) -> dict:
         or _clean_price(metas.get("product:price:amount") or metas.get("og:price:amount") or "")
     )
     if not price:
-        txt = " ".join(parser.text_parts)
-        m = re.search(r"(?:₹|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)", txt, re.IGNORECASE)
+        m = re.search(r"(?:₹|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)", " ".join(parser.text_parts), re.IGNORECASE)
         if m:
             price = _clean_price(m.group(1))
 
@@ -179,12 +185,12 @@ async def fetch_product_info(url: str) -> dict:
         "title": unescape(title).strip(),
         "image": image,
         "price": price,
-        "platform": detect_store(final_url),
+        "platform": detect_platform(final_url),
         "source_url": final_url,
     }
 
 
-async def convert_to_profit_link(deal_url: str) -> str:
+async def convert_earnkaro_link(deal_url: str) -> str:
     token = getattr(Config, "EARNKARO_TOKEN", "")
     api_url = getattr(
         Config,
@@ -195,7 +201,7 @@ async def convert_to_profit_link(deal_url: str) -> str:
         return deal_url
 
     try:
-        timeout = aiohttp.ClientTimeout(total=12)
+        timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 api_url,
@@ -218,19 +224,19 @@ async def convert_to_profit_link(deal_url: str) -> str:
     return deal_url
 
 
-async def save_product_from_link(raw_link: str, category: str) -> dict:
-    info = await fetch_product_info(raw_link)
-    profit_link = await convert_to_profit_link(info["source_url"])
-    return await save_product_item({
-        "title": info["title"],
-        "image": info["image"],
-        "price": info["price"],
-        "platform": info["platform"],
-        "category": category,
-        "source_url": info["source_url"],
-        "url": profit_link,
-    })
+class ProductRepository:
+    async def save_product(self, raw_link: str, category: str) -> dict:
+        details = await fetch_product_details(raw_link)
+        profit_url = await convert_earnkaro_link(details["source_url"])
+        return await save_product_item({
+            "title": details["title"],
+            "image": details["image"],
+            "price": details["price"],
+            "platform": details["platform"],
+            "category": category,
+            "source_url": details["source_url"],
+            "url": profit_url,
+        })
 
-
-async def get_products_for_frontend() -> dict:
-    return await get_products_grouped_by_category()
+    async def get_grouped_products(self) -> dict:
+        return await get_products_grouped_by_category()
